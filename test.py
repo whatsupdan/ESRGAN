@@ -63,6 +63,7 @@ nf = state_dict['model.0.weight'].shape[0]
 model = arch.RRDB_Net(in_nc, out_nc, nf, nb, gc=32, upscale=upscale, norm_type=None, act_type='leakyrelu', \
                         mode='CNA', res_scale=1, upsample_mode='upconv')
 model.load_state_dict(state_dict, strict=True)
+del state_dict
 model.eval()
 for k, v in model.named_parameters():
     v.requires_grad = False
