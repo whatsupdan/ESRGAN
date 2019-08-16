@@ -5,23 +5,47 @@ import cv2
 import numpy as np
 import torch
 import architecture as arch
+import argparse
 
-model_path = sys.argv[1]  # models/RRDB_ESRGAN_x4.pth OR models/RRDB_PSNR_x4.pth
-device = torch.device('cuda')  # if you want to run on CPU, change 'cuda' -> cpu
-# device = torch.device('cpu')
+parser = argparse.ArgumentParser()
+parser.add_argument('model')
+parser.add_argument('--input', default='LR', help='Input folder')
+parser.add_argument('--output', default='results', help='Output folder')
+parser.add_argument('--cpu', action='store_true', help='Use CPU instead of CUDA')
+args = parser.parse_args()
 
-test_img_folder = 'LR/*'
+if not os.path.exists(args.model):
+    print('Error: Model [{:s}] does not exist.'.format(args.model))
+    sys.exit(1)
+elif not os.path.exists(args.input):
+    print('Error: Folder [{:s}] does not exist.'.format(args.input))
+    sys.exit(1)
+elif os.path.isfile(args.input):
+    print('Error: Folder [{:s}] is a file.'.format(args.input))
+    sys.exit(1)
+elif os.path.isfile(args.output):
+    print('Error: Folder [{:s}] is a file.'.format(args.output))
+    sys.exit(1)
+elif not os.path.exists(args.output):
+    os.mkdir(args.output)
+
+model_path = args.model
+device = torch.device('cpu' if args.cpu else 'cuda')
+
+test_img_folder = os.path.join(os.path.normpath(args.input), '*')
+output_folder = os.path.normpath(args.output)
 
 state_dict = torch.load(model_path)
 
 if 'conv_first.weight' in state_dict:
-    raise ValueError("Attempted to load a new-format model")
+    print('Error: Attempted to load a new-format model')
+    sys.exit(1)
 
 # extract model information
 scale2 = 0
 max_part = 0
 for part in list(state_dict):
-    parts = part.split(".")
+    parts = part.split('.')
     n_parts = len(parts)
     if n_parts == 5 and parts[2] == 'sub':
         nb = int(parts[3])
@@ -60,7 +84,7 @@ for path in glob.glob(test_img_folder):
     if img.ndim == 2:
         img = np.tile(np.expand_dims(img, axis=2), (1, 1, min(in_nc, 3)))
     if img.shape[2] > in_nc: # remove extra channels
-        print("Warning: Truncating image channels")
+        print('Warning: Truncating image channels')
         img = img[:, :, :in_nc]
     elif img.shape[2] == 3 and in_nc == 4: # pad with solid alpha channel
         img = np.dstack((img, np.full(img.shape[:-1], 1.)))
@@ -80,4 +104,4 @@ for path in glob.glob(test_img_folder):
         output = output[[2, 1, 0, 3], :, :]
     output = np.transpose(output, (1, 2, 0))
     output = (output * 255.0).round()
-    cv2.imwrite('results/{:s}_rlt.png'.format(base), output)
+    cv2.imwrite(os.path.join(output_folder, '{:s}_rlt.png'.format(base)), output)
