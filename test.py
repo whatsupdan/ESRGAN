@@ -98,7 +98,7 @@ for path in glob.glob(test_img_folder):
     img_LR = img.unsqueeze(0)
     img_LR = img_LR.to(device)
 
-    output = model(img_LR).data.squeeze().float().cpu().clamp_(0, 1).numpy()
+    output = model(img_LR).data.squeeze(0).float().cpu().clamp_(0, 1).numpy()
     if output.shape[0] == 3:
         output = output[[2, 1, 0], :, :]
     elif output.shape[0] == 4:
