@@ -85,7 +85,8 @@ for path in glob.glob(test_img_folder):
     if img.ndim == 2:
         img = np.tile(np.expand_dims(img, axis=2), (1, 1, min(in_nc, 3)))
     if img.shape[2] > in_nc: # remove extra channels
-        print('Warning: Truncating image channels')
+        if in_nc != 3 or img.shape[2] != 4 or img[:, :, 3].min() < 1:
+            print('Warning: Truncating image channels')
         img = img[:, :, :in_nc]
     elif img.shape[2] == 3 and in_nc == 4: # pad with solid alpha channel
         img = np.dstack((img, np.full(img.shape[:-1], 1.)))

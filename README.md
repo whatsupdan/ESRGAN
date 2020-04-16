@@ -1,11 +1,11 @@
-# ESRGAN (Enhanced SRGAN) [[Paper]](https://arxiv.org/abs/1809.00219) [[BasicSR]](https://github.com/xinntao/BasicSR) 
-## :smiley: Training codes are in [BasicSR](https://github.com/xinntao/BasicSR) repo.
+# ESRGAN (Enhanced SRGAN) [[Paper]](https://arxiv.org/abs/1809.00219) [[BasicSR]](https://github.com/BlueAmulet/BasicSR) 
+## :smiley: Training codes are in [BasicSR](https://github.com/BlueAmulet/BasicSR) repo.
 ### Enhanced Super-Resolution Generative Adversarial Networks
 By Xintao Wang, [Ke Yu](https://yuke93.github.io/), Shixiang Wu, [Jinjin Gu](http://www.jasongt.com/), Yihao Liu, [Chao Dong](https://scholar.google.com.hk/citations?user=OSDCB0UAAAAJ&hl=en), [Yu Qiao](http://mmlab.siat.ac.cn/yuqiao/), [Chen Change Loy](http://personal.ie.cuhk.edu.hk/~ccloy/)
 
 This repo only provides simple testing codes, pretrained models and the network strategy demo. 
 
-### **For full training and testing codes, please refer to  [BasicSR](https://github.com/xinntao/BasicSR).**
+### **For full training and testing codes, please refer to  [BasicSR](https://github.com/BlueAmulet/BasicSR).**
 
 We won the first place in [PIRM2018-SR competition](https://www.pirm2018.org/PIRM-SR.html) (region 3) and got the best perceptual index.
 The paper is accepted to [ECCV2018 PIRM Workshop](https://pirm2018.org/).
@@ -55,15 +55,15 @@ The **RRDB_PSNR** PSNR_oriented model trained with DF2K dataset (a merged datase
 ### Test models
 1. Clone this github repo. 
 ```
-git clone https://github.com/xinntao/ESRGAN
+git clone https://github.com/BlueAmulet/ESRGAN
 cd ESRGAN
 ```
 2. Place your own **low-resolution images** in `./LR` folder. (There are two sample images - baboon and comic). 
-3. Download pretrained models from [Google Drive](https://drive.google.com/drive/u/0/folders/17VYV_SoZZesU6mbxz2dMAIccSSlqLecY) or [Baidu Drive](https://pan.baidu.com/s/1-Lh6ma-wXzfH8NqeBtPaFQ). Place the models in `./models`. We provide two models with high perceptual quality and high PSNR performance (see [model list](https://github.com/xinntao/ESRGAN/tree/master/models)).
+3. Download old_arch pretrained models from [Google Drive](https://drive.google.com/drive/u/0/folders/17VYV_SoZZesU6mbxz2dMAIccSSlqLecY) or [Baidu Drive](https://pan.baidu.com/s/1-Lh6ma-wXzfH8NqeBtPaFQ). Place the models in `./models`. We provide two models with high perceptual quality and high PSNR performance (see [model list](https://github.com/xinntao/ESRGAN/tree/master/models)).
 4. Run test. We provide ESRGAN model and RRDB_PSNR model.
 ```
-python test.py models/RRDB_ESRGAN_x4.pth
-python test.py models/RRDB_PSNR_x4.pth
+python test.py models/RRDB_ESRGAN_x4_old_arch.pth
+python test.py models/RRDB_PSNR_x4_old_arch.pth
 ```
 5. The results are in `./results` folder.
 ### Network interpolation demo
@@ -80,7 +80,7 @@ You can interpolate the RRDB_ESRGAN and RRDB_PSNR models with alpha in [0, 1].
 
 You can download all the resutls from [Google Drive](https://drive.google.com/drive/folders/1iaM-c6EgT1FNoJAOKmDrK7YhEhtlKcLx?usp=sharing). (:heavy_check_mark: included;  :heavy_minus_sign: not included; :o: TODO)
 
-HR images can be downloaed from [BasicSR-Datasets](https://github.com/xinntao/BasicSR#datasets).
+HR images can be downloaed from [BasicSR-Datasets](https://github.com/BlueAmulet/BasicSR#datasets).
 
 | Datasets |LR | [*ESRGAN*](https://arxiv.org/abs/1809.00219) | [SRGAN](https://arxiv.org/abs/1609.04802) | [EnhanceNet](http://openaccess.thecvf.com/content_ICCV_2017/papers/Sajjadi_EnhanceNet_Single_Image_ICCV_2017_paper.pdf) | [CX](https://arxiv.org/abs/1803.04626) |
 |:---:|:---:|:---:|:---:|:---:|:---:|
