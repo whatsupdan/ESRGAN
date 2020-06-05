@@ -11,3 +11,7 @@ To change the tile size for the split/merge functionality, use the `--tile_size`
 To set your textures to seamless, use the `--seamless` flag
 
 To chain models, simply put one model name after another with a `>` in between, such as `1xDeJpeg.pth>4xESRGAN.pth` **note: model names must be the complete full name, and the models must be present in your `/models` folder. Unlike normal ESRGAN, you should not include `/models` in the model names.
+
+Examples: 
+* `python test.py 4xBox.pth --seamless`
+* `python test.py 1xSSAntiAlias9x.pth>4xBox.pth --tile_size=800`
