@@ -11,18 +11,22 @@ import torch
 import architecture as arch
 
 parser = argparse.ArgumentParser()
+parser.register('type', bool, (lambda x: x.lower()
+                               in ("true")))
 parser.add_argument('model')
 parser.add_argument('--input', default='LR', help='Input folder')
-parser.add_argument('--output', default='results', help='Output folder')
-parser.add_argument('--tile_size', default=512, help='Tile size for splitting')
+parser.add_argument('--output', default='results',
+                    help='Output folder')
+parser.add_argument('--tile_size', default=512,
+                    help='Tile size for splitting', type=int)
 parser.add_argument('--seamless', default=False,
-                    help='Seamless upscaling or not')
-parser.add_argument('--cpu', action='store_true',
-                    help='Use CPU instead of CUDA')
+                    help='Seamless upscaling or not', type=bool)
+parser.add_argument('--cpu', default=False,
+                    help='Use CPU instead of CUDA', type=bool)
 parser.add_argument('--binary_alpha', default=False,
-                    help='Whether to use a 1 bit alpha transparency channel - Useful for PSX upscaling')
+                    help='Whether to use a 1 bit alpha transparency channel, Useful for PSX upscaling', type=bool)
 parser.add_argument('--alpha_threshold', default=.5,
-                    help='Only used when binary_alpha is supplied. Defines the alpha threshold for binary transparency')
+                    help='Only used when binary_alpha is supplied. Defines the alpha threshold for binary transparency', type=float)
 args = parser.parse_args()
 
 model_chain = args.model.split('>')
@@ -283,17 +287,15 @@ def esrgan(imgs, model_name):
             output2 = process(img2)
             alpha = 1 - np.mean(output2-output1, axis=2)
 
-            if args.binary_alpha == 'True':
+            if args.binary_alpha:
                 transparent = 0.
                 opaque = 1.
-                alpha_threshold = args.alpha_threshold if type(
-                    args.alpha_threshold) is float else float(args.alpha_threshold)
                 rows = []
                 for a in alpha:
                     row = []
 
                     for alpha_val in a:
-                        column = transparent if alpha_val < alpha_threshold else opaque
+                        column = transparent if alpha_val < args.alpha_threshold else opaque
                         row.append(column)
                     rows.append(row)
                 alpha = np.array(rows, np.float32)
@@ -367,8 +369,7 @@ for path in glob.glob(test_img_folder):
     for i in range(len(model_chain)):
 
         img_height, img_width, img_channels = img.shape
-        dim = int(args.tile_size) if type(
-            args.tile_size) is str else args.tile_size
+        dim = args.tile_size
         overlap = 16
 
         while img_height % dim < 16 or img_width % dim < 16:
