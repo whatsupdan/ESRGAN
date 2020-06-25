@@ -347,7 +347,8 @@ for path in glob.glob(test_img_folder):
     for i in range(len(model_chain)):
 
         img_height, img_width, img_channels = img.shape
-        dim = args.tile_size
+        dim = int(args.tile_size) if type(
+            args.tile_size) is str else args.tile_size
         overlap = 16
 
         while img_height % dim < 16 or img_width % dim < 16:
