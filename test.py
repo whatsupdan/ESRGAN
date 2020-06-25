@@ -11,14 +11,22 @@ import torch
 import architecture as arch
 
 parser = argparse.ArgumentParser()
+parser.register('type', bool, (lambda x: x.lower()
+                               in ("true")))
 parser.add_argument('model')
 parser.add_argument('--input', default='LR', help='Input folder')
-parser.add_argument('--output', default='results', help='Output folder')
-parser.add_argument('--tile_size', default=512, help='Tile size for splitting')
+parser.add_argument('--output', default='results',
+                    help='Output folder')
+parser.add_argument('--tile_size', default=512,
+                    help='Tile size for splitting', type=int)
 parser.add_argument('--seamless', default=False,
-                    help='Seamless upscaling or not')
-parser.add_argument('--cpu', action='store_true',
-                    help='Use CPU instead of CUDA')
+                    help='Seamless upscaling or not', type=bool)
+parser.add_argument('--cpu', default=False,
+                    help='Use CPU instead of CUDA', type=bool)
+parser.add_argument('--binary_alpha', default=False,
+                    help='Whether to use a 1 bit alpha transparency channel, Useful for PSX upscaling', type=bool)
+parser.add_argument('--alpha_threshold', default=.5,
+                    help='Only used when binary_alpha is supplied. Defines the alpha threshold for binary transparency', type=float)
 args = parser.parse_args()
 
 model_chain = args.model.split('>')
@@ -50,7 +58,7 @@ def split(img, dim, overlap):
     Creates an array of equal length image chunks to use for upscaling
 
             Parameters:
-                    img (array): Numpy image array 
+                    img (array): Numpy image array
                     dim (int): Number to use for length and height of image chunks
                     overlap (int): The amount of overlap between chunks
 
@@ -78,7 +86,7 @@ def merge(rlts, scale, overlap, img_height, img_width, img_channels, num_horiz, 
     Merges the image chunks back together
 
             Parameters:
-                    rlts (array): The resulting images from ESRGAN 
+                    rlts (array): The resulting images from ESRGAN
                     scale (int): The scale of the model that was applied
                     overlap (int): The amount of overlap between chunks
                     img_height (int): The height of the original image
@@ -278,6 +286,20 @@ def esrgan(imgs, model_name):
             output1 = process(img1)
             output2 = process(img2)
             alpha = 1 - np.mean(output2-output1, axis=2)
+
+            if args.binary_alpha:
+                transparent = 0.
+                opaque = 1.
+                rows = []
+                for a in alpha:
+                    row = []
+
+                    for alpha_val in a:
+                        column = transparent if alpha_val < args.alpha_threshold else opaque
+                        row.append(column)
+                    rows.append(row)
+                alpha = np.array(rows, np.float32)
+
             output = np.dstack((output1, alpha))
             shape = output1.shape
             divalpha = np.where(alpha < 1. / 510., 1, alpha)
@@ -347,8 +369,7 @@ for path in glob.glob(test_img_folder):
     for i in range(len(model_chain)):
 
         img_height, img_width, img_channels = img.shape
-        dim = int(args.tile_size) if type(
-            args.tile_size) is str else args.tile_size
+        dim = args.tile_size
         overlap = 16
 
         while img_height % dim < 16 or img_width % dim < 16:
@@ -379,4 +400,4 @@ for path in glob.glob(test_img_folder):
         if len(model_chain) > 1:
             img = rlt.astype('uint8')
 
-    cv2.imwrite(os.path.join(output_folder, '{:s}_rlt.png'.format(base)), rlt)
+    cv2.imwrite(os.path.join(output_folder, '{:s}.png'.format(base)), rlt)
