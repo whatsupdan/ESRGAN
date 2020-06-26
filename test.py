@@ -302,9 +302,11 @@ def esrgan(imgs, model_name):
                     for alpha_val in a:
                         if alpha_val < half_transparent_lower_bound:
                             column = transparent
-                        if alpha_val >= half_transparent_lower_bound and half_transparent_upper_bound < 0.7:
+                        elif alpha_val >= half_transparent_lower_bound and half_transparent_upper_bound < 0.7:
                             column = half_transparent
-                        if alpha_val >= half_transparent_upper_bound:
+                        elif alpha_val >= half_transparent_upper_bound:
+                            column = opaque
+                        else:
                             column = opaque
                         row.append(column)
                     rows.append(row)
