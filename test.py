@@ -27,6 +27,8 @@ parser.add_argument('--binary_alpha', default=False,
                     help='Whether to use a 1 bit alpha transparency channel, Useful for PSX upscaling', type=bool)
 parser.add_argument('--alpha_threshold', default=.5,
                     help='Only used when binary_alpha is supplied. Defines the alpha threshold for binary transparency', type=float)
+parser.add_argument('--alpha_boundary_offset', default=.2,
+                    help='Only used when binary_alpha is supplied. Determines the offset boundary from the alpha threshold for half transparency.', type=float)
 args = parser.parse_args()
 
 model_chain = args.model.split('>')
@@ -290,12 +292,22 @@ def esrgan(imgs, model_name):
             if args.binary_alpha:
                 transparent = 0.
                 opaque = 1.
+                half_transparent = .5
+                half_transparent_lower_bound = args.alpha_threshold - args.alpha_boundary_offset
+                half_transparent_upper_bound = args.alpha_threshold + args.alpha_boundary_offset
                 rows = []
                 for a in alpha:
                     row = []
 
                     for alpha_val in a:
-                        column = transparent if alpha_val < args.alpha_threshold else opaque
+                        if alpha_val < half_transparent_lower_bound:
+                            column = transparent
+                        elif alpha_val >= half_transparent_lower_bound and alpha_val <= half_transparent_upper_bound:
+                            column = half_transparent
+                        elif alpha_val > half_transparent_upper_bound:
+                            column = opaque
+                        else:
+                            column = opaque
                         row.append(column)
                     rows.append(row)
                 alpha = np.array(rows, np.float32)
@@ -372,8 +384,8 @@ for path in glob.glob(test_img_folder):
         dim = args.tile_size
         overlap = 16
 
-        while img_height % dim < 16 or img_width % dim < 16:
-            dim -= 16
+        while dim > overlap and (img_height % dim < overlap or img_width % dim < overlap):
+            dim -= overlap
 
         do_split = img_height > dim or img_width > dim
 
