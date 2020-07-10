@@ -61,6 +61,15 @@ device = torch.device('cpu' if args.cpu else 'cuda')
 test_img_folder = os.path.join(os.path.normpath(args.input), '*')
 output_folder = os.path.normpath(args.output)
 
+in_nc = None
+out_nc = None
+last_model = None
+last_in_nc = None
+last_out_nc = None
+last_nf = None
+last_nb = None
+last_scale = None
+model = None
 
 def split(img, dim, overlap):
     '''
@@ -90,7 +99,7 @@ def split(img, dim, overlap):
 # This method is a somewhat modified version of BlueAmulet's original pymerge script that is able to use my split chunks
 
 
-def merge(rlts, scale, overlap, img_height, img_width, img_channels, num_horiz, num_vert):
+def merge(rlts, scale, overlap, img_height, img_width, num_horiz, num_vert):
     '''
     Merges the image chunks back together
 
@@ -111,9 +120,6 @@ def merge(rlts, scale, overlap, img_height, img_width, img_channels, num_horiz, 
     rlts_fin = [[None for x in range(num_horiz)]
                 for y in range(num_vert)]
 
-    rlt = np.zeros((img_height * scale,
-                    img_width * scale, img_channels))
-
     c = 0
     for tY in range(num_vert):
         for tX in range(num_horiz):
@@ -121,6 +127,9 @@ def merge(rlts, scale, overlap, img_height, img_width, img_channels, num_horiz, 
             shape = img.shape
             c = max(c, shape[2])
             rlts_fin[tY][tX] = img
+
+    rlt = np.zeros((img_height * scale,
+                    img_width * scale, c))
 
     for tY in range(num_vert):
         for tX in range(num_horiz):
@@ -216,8 +225,6 @@ def process(img):
     return output
 
 # This code is a somewhat modified version of BlueAmulet's fork of ESRGAN by Xinntao
-
-
 def esrgan(imgs, model_path):
     global last_model, last_in_nc, last_out_nc, last_nf, last_nb, last_scale, model
     '''
@@ -371,16 +378,6 @@ def crop_seamless(img, scale):
     return img
 
 
-# state_dict = torch.load(model_path)
-
-last_model = None
-last_in_nc = None
-last_out_nc = None
-last_nf = None
-last_nb = None
-last_scale = None
-model = None
-
 print('Model{:s}: {:s}\nUpscaling...'.format(
       's' if len(model_chain) > 1 else '',
       ', '.join([os.path.splitext(os.path.basename(x))[0] for x in model_chain])))
@@ -398,7 +395,7 @@ for path in sorted(glob.glob(test_img_folder)):
 
     for model_path in model_chain:
 
-        img_height, img_width, img_channels = img.shape
+        img_height, img_width = img.shape[:2]
         dim = args.tile_size
         overlap = 16
 
@@ -420,7 +417,7 @@ for path in sorted(glob.glob(test_img_folder)):
 
         if do_split:
             rlt = merge(rlts, scale, overlap, img_height,
-                        img_width, img_channels, num_horiz, num_vert)
+                        img_width, num_horiz, num_vert)
         else:
             rlt = rlts[0]
 
