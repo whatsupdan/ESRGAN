@@ -31,7 +31,10 @@ parser.add_argument('--alpha_boundary_offset', default=.2,
                     help='Only used when binary_alpha is supplied. Determines the offset boundary from the alpha threshold for half transparency.', type=float)
 args = parser.parse_args()
 
-model_chain = args.model.split('>')
+if '+' in args.model:
+    model_chain = args.model.split('+')
+else:
+    model_chain = args.model.split('>')
 for idx, model in enumerate(model_chain):
     if os.path.exists(model):
         pass
