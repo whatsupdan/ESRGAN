@@ -76,7 +76,7 @@ def split(img, dim, overlap):
                     num_horiz (int): Number of horizontal chunks
                     num_vert (int): Number of vertical chunks
     '''
-    img_height, img_width, img_channels = img.shape
+    img_height, img_width = img.shape[:2]
     num_horiz = math.ceil(img_width / dim)
     num_vert = math.ceil(img_height / dim)
     imgs = []
@@ -90,7 +90,7 @@ def split(img, dim, overlap):
 # This method is a somewhat modified version of BlueAmulet's original pymerge script that is able to use my split chunks
 
 
-def merge(rlts, scale, overlap, img_height, img_width, img_channels, num_horiz, num_vert):
+def merge(rlts, scale, overlap, img_height, img_width, num_horiz, num_vert):
     '''
     Merges the image chunks back together
 
@@ -111,9 +111,6 @@ def merge(rlts, scale, overlap, img_height, img_width, img_channels, num_horiz, 
     rlts_fin = [[None for x in range(num_horiz)]
                 for y in range(num_vert)]
 
-    rlt = np.zeros((img_height * scale,
-                    img_width * scale, img_channels))
-
     c = 0
     for tY in range(num_vert):
         for tX in range(num_horiz):
@@ -121,6 +118,9 @@ def merge(rlts, scale, overlap, img_height, img_width, img_channels, num_horiz, 
             shape = img.shape
             c = max(c, shape[2])
             rlts_fin[tY][tX] = img
+
+    rlt = np.zeros((img_height * scale,
+                    img_width * scale, c))
 
     for tY in range(num_vert):
         for tX in range(num_horiz):
@@ -354,7 +354,7 @@ def esrgan(imgs, model_path):
 
 
 def make_seamless(img):
-    img_height, img_width, img_channels = img.shape
+    img_height, img_width = img.shape[:2]
     img = cv2.hconcat([img, img, img])
     img = cv2.vconcat([img, img, img])
     y, x = img_height - 16, img_width - 16
@@ -364,7 +364,7 @@ def make_seamless(img):
 
 
 def crop_seamless(img, scale):
-    img_height, img_width, img_channels = img.shape
+    img_height, img_width = img.shape[:2]
     y, x = 16 * scale, 16 * scale
     h, w = img_height - (32 * scale), img_width - (32 * scale)
     img = img[y:y+h, x:x+w]
@@ -398,7 +398,7 @@ for path in sorted(glob.glob(test_img_folder)):
 
     for model_path in model_chain:
 
-        img_height, img_width, img_channels = img.shape
+        img_height, img_width = img.shape[:2]
         dim = args.tile_size
         overlap = 16
 
@@ -420,7 +420,7 @@ for path in sorted(glob.glob(test_img_folder)):
 
         if do_split:
             rlt = merge(rlts, scale, overlap, img_height,
-                        img_width, img_channels, num_horiz, num_vert)
+                        img_width, num_horiz, num_vert)
         else:
             rlt = rlts[0]
 
