@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import torch
 
-import architecture as arch
+import utils.architecture as arch
 
 parser = argparse.ArgumentParser()
 parser.register('type', bool, (lambda x: x.lower()
