@@ -7,6 +7,7 @@ This fork ports features over from my ESRGAN-Bot repository. It natively allows:
 * Model chaining
 * Transparency preservation
 * 1-bit transparency support
+* Both new-arch and old-arch models
 
 To change the tile size for the split/merge functionality, use the `--tile_size` argument
 
