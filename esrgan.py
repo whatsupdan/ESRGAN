@@ -356,7 +356,7 @@ print('Model{:s}: {:s}\nUpscaling...'.format(
       ', '.join([os.path.splitext(os.path.basename(x))[0] for x in model_chain])))
 
 idx = 0
-for path in glob.glob(test_img_folder):
+for path in sorted(glob.glob(test_img_folder)):
     if os.path.isdir(path):  # skip directories
         continue
     idx += 1
