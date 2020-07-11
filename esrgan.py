@@ -387,7 +387,7 @@ for root, _, files in os.walk(input_folder):
     for file in files:
         images.append(os.path.join(root, file))
 for idx, path in enumerate(images, 1):
-    base = os.path.relpath(path, input_folder)
+    base = os.path.splitext(os.path.relpath(path, input_folder))[0]
     output_dir = os.path.dirname(os.path.join(output_folder, base))
     os.makedirs(output_dir, exist_ok=True)
     print(idx, base)
