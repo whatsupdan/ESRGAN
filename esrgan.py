@@ -58,7 +58,7 @@ elif not os.path.exists(args.output):
 
 device = torch.device('cpu' if args.cpu else 'cuda')
 
-test_img_folder = os.path.join(os.path.normpath(args.input), '*')
+input_folder = os.path.normpath(args.input)
 output_folder = os.path.normpath(args.output)
 
 in_nc = None
@@ -382,12 +382,14 @@ print('Model{:s}: {:s}\nUpscaling...'.format(
       's' if len(model_chain) > 1 else '',
       ', '.join([os.path.splitext(os.path.basename(x))[0] for x in model_chain])))
 
-idx = 0
-for path in sorted(glob.glob(test_img_folder)):
-    if os.path.isdir(path):  # skip directories
-        continue
-    idx += 1
-    base = os.path.splitext(os.path.basename(path))[0]
+images=[]
+for root, _, files in os.walk(input_folder):
+    for file in files:
+        images.append(os.path.join(root, file))
+for idx, path in enumerate(images, 1):
+    base = os.path.relpath(path, input_folder)
+    output_dir = os.path.dirname(os.path.join(output_folder, base))
+    os.makedirs(output_dir, exist_ok=True)
     print(idx, base)
     # read image
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
