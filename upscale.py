@@ -69,6 +69,7 @@ last_out_nc = None
 last_nf = None
 last_nb = None
 last_scale = None
+last_kind = None
 model = None
 
 def split(img, dim, overlap):
@@ -225,8 +226,8 @@ def process(img):
     return output
 
 # This code is a somewhat modified version of BlueAmulet's fork of ESRGAN by Xinntao
-def esrgan(imgs, model_path):
-    global last_model, last_in_nc, last_out_nc, last_nf, last_nb, last_scale, model
+def upscale(imgs, model_path):
+    global last_model, last_in_nc, last_out_nc, last_nf, last_nb, last_scale, last_kind, model
     '''
     Runs ESRGAN on all the images passed in with the specified model
 
@@ -290,11 +291,20 @@ def esrgan(imgs, model_path):
                     out_nc = state_dict[part].shape[0]
         upscale = 2 ** scale2
         in_nc = state_dict['model.0.weight'].shape[1]
+        if 'f_HR_conv1.0.weight' in state_dict:
+            kind = 'SPSR'
+            out_nc = state_dict['f_HR_conv1.0.weight'].shape[0]
+        else:
+            kind = 'ESRGAN'
         nf = state_dict['model.0.weight'].shape[0]
 
-        if in_nc != last_in_nc or out_nc != last_out_nc or nf != last_nf or nb != last_nb or upscale != last_scale:
-            model = arch.RRDB_Net(in_nc, out_nc, nf, nb, gc=32, upscale=upscale, norm_type=None, act_type='leakyrelu',
-                                  mode='CNA', res_scale=1, upsample_mode='upconv')
+        if in_nc != last_in_nc or out_nc != last_out_nc or nf != last_nf or nb != last_nb or upscale != last_scale or kind != last_kind:
+            if kind == 'ESRGAN':
+                model = arch.RRDB_Net(in_nc, out_nc, nf, nb, gc=32, upscale=upscale, norm_type=None, act_type='leakyrelu',
+                                      mode='CNA', res_scale=1, upsample_mode='upconv')
+            elif kind == 'SPSR':
+                model = arch.SPSRNet(in_nc, out_nc, nf, nb, gc=32, upscale=upscale, norm_type=None, act_type='leakyrelu',
+                                     mode='CNA', upsample_mode='upconv')
             last_in_nc = in_nc
             last_out_nc = out_nc
             last_nf = nf
@@ -415,7 +425,7 @@ for idx, path in enumerate(images, 1):
         else:
             imgs = [img]
 
-        rlts, scale = esrgan(imgs, model_path)
+        rlts, scale = upscale(imgs, model_path)
 
         if do_split:
             rlt = merge(rlts, scale, overlap, img_height,
