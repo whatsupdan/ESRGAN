@@ -277,6 +277,12 @@ def upscale(imgs, model_path):
         # extract model information
         scale2 = 0
         max_part = 0
+        if 'f_HR_conv1.0.weight' in state_dict:
+            kind = 'SPSR'
+            scalemin = 4
+        else:
+            kind = 'ESRGAN'
+            scalemin = 6
         for part in list(state_dict):
             parts = part.split('.')
             n_parts = len(parts)
@@ -284,18 +290,15 @@ def upscale(imgs, model_path):
                 nb = int(parts[3])
             elif n_parts == 3:
                 part_num = int(parts[1])
-                if part_num > 6 and parts[2] == 'weight':
+                if part_num > scalemin and parts[0] == 'model' and parts[2] == 'weight':
                     scale2 += 1
                 if part_num > max_part:
                     max_part = part_num
                     out_nc = state_dict[part].shape[0]
         upscale = 2 ** scale2
         in_nc = state_dict['model.0.weight'].shape[1]
-        if 'f_HR_conv1.0.weight' in state_dict:
-            kind = 'SPSR'
+        if kind == 'SPSR':
             out_nc = state_dict['f_HR_conv1.0.weight'].shape[0]
-        else:
-            kind = 'ESRGAN'
         nf = state_dict['model.0.weight'].shape[0]
 
         if in_nc != last_in_nc or out_nc != last_out_nc or nf != last_nf or nb != last_nb or upscale != last_scale or kind != last_kind:
