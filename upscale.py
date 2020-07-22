@@ -313,6 +313,7 @@ def upscale(imgs, model_path):
             last_nf = nf
             last_nb = nb
             last_scale = upscale
+            last_kind = kind
 
         model.load_state_dict(state_dict, strict=True)
         del state_dict
