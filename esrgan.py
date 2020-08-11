@@ -14,8 +14,8 @@ parser = argparse.ArgumentParser()
 parser.register('type', bool, (lambda x: x.lower()
                                in ("true")))
 parser.add_argument('model')
-parser.add_argument('--input', default='LR', help='Input folder')
-parser.add_argument('--output', default='results',
+parser.add_argument('--input', default='input', help='Input folder')
+parser.add_argument('--output', default='output',
                     help='Output folder')
 parser.add_argument('--tile_size', default=512,
                     help='Tile size for splitting', type=int)
