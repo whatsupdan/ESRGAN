@@ -385,7 +385,8 @@ print('Model{:s}: {:s}\nUpscaling...'.format(
 images=[]
 for root, _, files in os.walk(input_folder):
     for file in files:
-        images.append(os.path.join(root, file))
+        if file.split('.')[-1].lower() in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tga']:
+            images.append(os.path.join(root, file))
 for idx, path in enumerate(images, 1):
     base = os.path.splitext(os.path.relpath(path, input_folder))[0]
     output_dir = os.path.dirname(os.path.join(output_folder, base))
