@@ -8,6 +8,7 @@ This fork ports features over from my ESRGAN-Bot repository. It natively allows:
 * Transparency preservation
 * 1-bit transparency support
 * Both new-arch and old-arch models
+* SPSR models
 
 To change the tile size for the split/merge functionality, use the `--tile_size` argument
 
@@ -19,7 +20,7 @@ To use 1 bit binary alpha transparency, set the `--binary_alpha` flag to True. W
 
 Examples:
 
-* `python esrgan.py 4xBox.pth --seamless`
-* `python esrgan.py 1xSSAntiAlias9x.pth>4xBox.pth --tile_size=800`
-* `python esrgan.py 4xBox.pth --binary_alpha True --alpha_threshold .2`
-* `python esrgan.py /models/4xBox.pth`
+* `python upscale.py 4xBox.pth --seamless`
+* `python upscale.py 1xSSAntiAlias9x.pth>4xBox.pth --tile_size=800`
+* `python upscale.py 4xBox.pth --binary_alpha True --alpha_threshold .2`
+* `python upscale.py /models/4xBox.pth`
