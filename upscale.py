@@ -411,7 +411,7 @@ for idx, path in enumerate(images, 1):
     os.makedirs(output_dir, exist_ok=True)
     print(idx, base)
     if args.skip_existing and os.path.isfile(
-      os.path.join(output_folder, '{:s}.png'.format(base))):
+        os.path.join(output_folder, '{:s}.png'.format(base))):
       print(" == Already exists, skipping == ")
       continue
     # read image
