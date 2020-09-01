@@ -19,12 +19,12 @@ parser.add_argument('--output', default='output',
                     help='Output folder')
 parser.add_argument('--tile_size', default=512,
                     help='Tile size for splitting', type=int)
-parser.add_argument('--seamless', default=False,
-                    help='Seamless upscaling or not', type=bool)
-parser.add_argument('--cpu', default=False,
-                    help='Use CPU instead of CUDA', type=bool)
-parser.add_argument('--binary_alpha', default=False,
-                    help='Whether to use a 1 bit alpha transparency channel, Useful for PSX upscaling', type=bool)
+parser.add_argument('--seamless', action='store_true',
+                    help='Seamless upscaling or not')
+parser.add_argument('--cpu', action='store_true',
+                    help='Use CPU instead of CUDA')
+parser.add_argument('--binary_alpha', action='store_true',
+                    help='Whether to use a 1 bit alpha transparency channel, Useful for PSX upscaling')
 parser.add_argument('--alpha_threshold', default=.5,
                     help='Only used when binary_alpha is supplied. Defines the alpha threshold for binary transparency', type=float)
 parser.add_argument('--alpha_boundary_offset', default=.2,

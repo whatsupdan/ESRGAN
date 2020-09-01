@@ -22,5 +22,5 @@ Examples:
 
 * `python upscale.py 4xBox.pth --seamless`
 * `python upscale.py 1xSSAntiAlias9x.pth>4xBox.pth --tile_size=800`
-* `python upscale.py 4xBox.pth --binary_alpha True --alpha_threshold .2`
+* `python upscale.py 4xBox.pth --binary_alpha --alpha_threshold .2`
 * `python upscale.py /models/4xBox.pth`
