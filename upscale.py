@@ -17,6 +17,10 @@ parser.add_argument('model')
 parser.add_argument('--input', default='input', help='Input folder')
 parser.add_argument('--output', default='output',
                     help='Output folder')
+parser.add_argument('--reverse', help='Reverse Order', default=False,
+                    action="store_true")
+parser.add_argument('--skip_existing', help='Skip existing output files',
+                    default=False, action="store_true")
 parser.add_argument('--tile_size', default=512,
                     help='Tile size for splitting', type=int)
 parser.add_argument('--seamless', action='store_true',
@@ -398,7 +402,7 @@ print('Model{:s}: {:s}\nUpscaling...'.format(
 
 images=[]
 for root, _, files in os.walk(input_folder):
-    for file in files:
+    for file in sorted(files, reverse=args.reverse):
         if file.split('.')[-1].lower() in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tga']:
             images.append(os.path.join(root, file))
 for idx, path in enumerate(images, 1):
@@ -406,6 +410,10 @@ for idx, path in enumerate(images, 1):
     output_dir = os.path.dirname(os.path.join(output_folder, base))
     os.makedirs(output_dir, exist_ok=True)
     print(idx, base)
+    if args.skip_existing and os.path.isfile(
+        os.path.join(output_folder, '{:s}.png'.format(base))):
+      print(" == Already exists, skipping == ")
+      continue
     # read image
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
     # img = img * 1. / np.iinfo(img.dtype).max
