@@ -33,6 +33,8 @@ parser.add_argument('--alpha_threshold', default=.5,
                     help='Only used when binary_alpha is supplied. Defines the alpha threshold for binary transparency', type=float)
 parser.add_argument('--alpha_boundary_offset', default=.2,
                     help='Only used when binary_alpha is supplied. Determines the offset boundary from the alpha threshold for half transparency.', type=float)
+parser.add_argument('--alpha_mode', help='Type of alpha processing to use. 1 is BA\'s difference method (this fork\'s default, which is necessary for using the binary alpha settings) and 2 is upscaling the alpha channel separately (like IEU).', 
+                    type=int, nargs='?', choices=[1, 2], default=1)
 args = parser.parse_args()
 
 if '+' in args.model:
@@ -333,32 +335,40 @@ def upscale(imgs, model_path):
 
         if img.ndim == 3 and img.shape[2] == 4 and last_in_nc == 3 and last_out_nc == 3:
             shape = img.shape
-            img1 = np.copy(img[:, :, :3])
-            img2 = np.copy(img[:, :, :3])
-            for c in range(3):
-                img1[:, :, c] *= img[:, :, 3]
-                img2[:, :, c] = (img2[:, :, c] - 1) * img[:, :, 3] + 1
+            if args.alpha_mode == 1:
+                img1 = np.copy(img[:, :, :3])
+                img2 = np.copy(img[:, :, :3])
+                for c in range(3):
+                    img1[:, :, c] *= img[:, :, 3]
+                    img2[:, :, c] = (img2[:, :, c] - 1) * img[:, :, 3] + 1
 
-            output1 = process(img1)
-            output2 = process(img2)
-            alpha = 1 - np.mean(output2-output1, axis=2)
+                output1 = process(img1)
+                output2 = process(img2)
+                alpha = 1 - np.mean(output2-output1, axis=2)
 
-            if args.binary_alpha:
-                transparent = 0.
-                opaque = 1.
-                half_transparent = .5
-                half_transparent_lower_bound = args.alpha_threshold - args.alpha_boundary_offset
-                half_transparent_upper_bound = args.alpha_threshold + args.alpha_boundary_offset
-                alpha = np.where(alpha < half_transparent_lower_bound, transparent,
-                                 np.where(alpha <= half_transparent_upper_bound,
-                                 half_transparent, opaque))
+                if args.binary_alpha:
+                    transparent = 0.
+                    opaque = 1.
+                    half_transparent = .5
+                    half_transparent_lower_bound = args.alpha_threshold - args.alpha_boundary_offset
+                    half_transparent_upper_bound = args.alpha_threshold + args.alpha_boundary_offset
+                    alpha = np.where(alpha < half_transparent_lower_bound, transparent,
+                                    np.where(alpha <= half_transparent_upper_bound,
+                                    half_transparent, opaque))
 
-            output = np.dstack((output1, alpha))
-            shape = output1.shape
-            divalpha = np.where(alpha < 1. / 510., 1, alpha)
-            for c in range(shape[2]):
-                output[:, :, c] /= divalpha
-            output = np.clip(output, 0, 1)
+                output = np.dstack((output1, alpha))
+                shape = output1.shape
+                divalpha = np.where(alpha < 1. / 510., 1, alpha)
+                for c in range(shape[2]):
+                    output[:, :, c] /= divalpha
+                output = np.clip(output, 0, 1)
+            else:
+                img1 = np.copy(img[:, :, :3])
+                img2 = cv2.merge((img[:, :, 3], img[:, :, 3], img[:, :, 3]))
+                output1 = process(img1)
+                output2 = process(img2)
+                output = cv2.merge(
+                    (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 0])) 
         else:
             if img.ndim == 2:
                 img = np.tile(np.expand_dims(img, axis=2),
