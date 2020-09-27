@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 import utils.architecture as arch
+import utils.dataops as ops
 
 parser = argparse.ArgumentParser()
 parser.register('type', bool, (lambda x: x.lower()
@@ -78,131 +79,7 @@ last_scale = None
 last_kind = None
 model = None
 
-def split(img, dim, overlap):
-    '''
-    Creates an array of equal length image chunks to use for upscaling
-
-            Parameters:
-                    img (array): Numpy image array
-                    dim (int): Number to use for length and height of image chunks
-                    overlap (int): The amount of overlap between chunks
-
-            Returns:
-                    imgs (array): Array of numpy image "chunks"
-                    num_horiz (int): Number of horizontal chunks
-                    num_vert (int): Number of vertical chunks
-    '''
-    img_height, img_width = img.shape[:2]
-    num_horiz = math.ceil(img_width / dim)
-    num_vert = math.ceil(img_height / dim)
-    imgs = []
-    for i in range(num_vert):
-        for j in range(num_horiz):
-            tile = img[i * dim:i * dim + dim + overlap,
-                       j * dim:j * dim + dim + overlap].copy()
-            imgs.append(tile)
-    return imgs, num_horiz, num_vert
-
-# This method is a somewhat modified version of BlueAmulet's original pymerge script that is able to use my split chunks
-
-
-def merge(rlts, scale, overlap, img_height, img_width, num_horiz, num_vert):
-    '''
-    Merges the image chunks back together
-
-            Parameters:
-                    rlts (array): The resulting images from ESRGAN
-                    scale (int): The scale of the model that was applied
-                    overlap (int): The amount of overlap between chunks
-                    img_height (int): The height of the original image
-                    img_width (int): The width of the original image
-                    num_horiz (int): Number of horizontal chunks
-                    num_vert (int): Number of vertical chunks
-
-            Returns:
-                    rlt (array): Numpy image array of the resulting merged image
-    '''
-    rlt_overlap = int(overlap * scale)
-
-    rlts_fin = [[None for x in range(num_horiz)]
-                for y in range(num_vert)]
-
-    c = 0
-    for tY in range(num_vert):
-        for tX in range(num_horiz):
-            img = rlts[tY*num_horiz+tX]
-            shape = img.shape
-            c = max(c, shape[2])
-            rlts_fin[tY][tX] = img
-
-    rlt = np.zeros((img_height * scale,
-                    img_width * scale, c))
-
-    for tY in range(num_vert):
-        for tX in range(num_horiz):
-            img = rlts_fin[tY][tX]
-            if img.shape[2] == 3 and c == 4:  # pad with solid alpha channel
-                img = np.dstack((img, np.full(img.shape[:-1], 1.)))
-                rlts_fin[tY][tX] = img
-            shape = img.shape
-            # Fade out edges
-            # Left edge
-            if tX > 0:
-                for x in range(rlt_overlap):
-                    img[:, x] *= ((x + 1)/(rlt_overlap + 1))
-            # Top edge
-            if tY > 0:
-                for y in range(rlt_overlap):
-                    img[y, :] *= ((y + 1)/(rlt_overlap + 1))
-            # Right edge
-            if tX < num_horiz - 1:
-                for x in range(rlt_overlap):
-                    iX = x + shape[1] - rlt_overlap
-                    img[:, iX] *= ((rlt_overlap - x) /
-                                   (rlt_overlap + 1))
-            # Bottom edge
-            if tY < num_vert - 1:
-                for y in range(rlt_overlap):
-                    iY = y + shape[0] - rlt_overlap
-                    img[iY, :] *= ((rlt_overlap - y) /
-                                   (rlt_overlap + 1))
-
-    baseY = 0
-    for tY in range(num_vert):
-        baseX = 0
-        for tX in range(num_horiz):
-            img = rlts_fin[tY][tX]
-            shape = img.shape
-
-            # Copy non overlapping image data
-            x1 = (0 if tX == 0 else rlt_overlap)
-            y1 = (0 if tY == 0 else rlt_overlap)
-            x2 = shape[1]
-            y2 = shape[0]
-            rlt[baseY+y1:baseY+y2, baseX +
-                x1:baseX+x2] = img[y1:y2, x1:x2]
-
-            # Blend left
-            if tX > 0:
-                rlt[baseY+y1:baseY+y2, baseX:baseX +
-                    rlt_overlap] += img[y1:y2, :rlt_overlap]
-
-            # Blend up
-            if tY > 0:
-                rlt[baseY:baseY+rlt_overlap, baseX +
-                    x1:baseX+x2] += img[:rlt_overlap, x1:x2]
-
-            # Blend corner
-            if tX > 0 and tY > 0:
-                rlt[baseY:baseY+rlt_overlap, baseX:baseX +
-                    rlt_overlap] += img[:rlt_overlap, :rlt_overlap]
-
-            baseX += shape[1] - rlt_overlap
-        baseY += shape[0] - rlt_overlap
-    return rlt
-
 # This code is a somewhat modified version of BlueAmulet's fork of ESRGAN by Xinntao
-
 
 def process(img):
     '''
@@ -434,25 +311,26 @@ for idx, path in enumerate(images, 1):
         dim = args.tile_size
         overlap = 16
 
-        while dim > overlap and (img_height % dim < overlap or img_width % dim < overlap):
-            dim -= overlap
-
         do_split = img_height > dim or img_width > dim
 
         if args.seamless:
             img = make_seamless(img)
+            img_height, img_width = img.shape[:2]
 
         if do_split:
-            imgs, num_horiz, num_vert = split(
-                img, dim, overlap)
+            tensor_img = ops.np2tensor(img)
+            imgs = ops.patchify_tensor(tensor_img, dim, overlap=overlap)
+            imgs = [ops.tensor2np(img) for img in imgs]
         else:
             imgs = [img]
 
         rlts, scale = upscale(imgs, model_path)
 
         if do_split:
-            rlt = merge(rlts, scale, overlap, img_height,
-                        img_width, num_horiz, num_vert)
+            rlts = [ops.np2tensor(rlt.astype('uint8')) for rlt in rlts]
+            rlts = torch.cat(rlts, 0)
+            rlt_tensor = ops.recompose_tensor(rlts, img_height * scale, img_width * scale, overlap=overlap * scale)
+            rlt = ops.tensor2np(rlt_tensor)
         else:
             rlt = rlts[0]
 
