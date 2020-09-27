@@ -26,6 +26,8 @@ parser.add_argument('--tile_size', default=512,
                     help='Tile size for splitting', type=int)
 parser.add_argument('--seamless', action='store_true',
                     help='Seamless upscaling or not')
+parser.add_argument('--mirror', action='store_true',
+                    help='Mirrored seamless upscaling or not')
 parser.add_argument('--cpu', action='store_true',
                     help='Use CPU instead of CUDA')
 parser.add_argument('--binary_alpha', action='store_true',
@@ -274,6 +276,15 @@ def make_seamless(img):
     img = img[y:y+h, x:x+w]
     return img
 
+def make_mirrored(img):
+    img_height, img_width = img.shape[:2]
+    layer_1 = cv2.hconcat([cv2.flip(img, -1), cv2.flip(img, 0), cv2.flip(img, -1)])
+    layer_2 = cv2.hconcat([cv2.flip(img, 1), img, cv2.flip(img, 1)])
+    img = cv2.vconcat([layer_1, layer_2, layer_1])
+    y, x = img_height - 16, img_width - 16
+    h, w = img_height + 32, img_width + 32
+    img = img[y:y+h, x:x+w]
+    return img
 
 def crop_seamless(img, scale):
     img_height, img_width = img.shape[:2]
@@ -313,8 +324,11 @@ for idx, path in enumerate(images, 1):
 
         do_split = img_height > dim or img_width > dim
 
-        if args.seamless:
+        if args.seamless and not args.mirror:
             img = make_seamless(img)
+            img_height, img_width = img.shape[:2]
+        elif args.mirror:
+            img = make_mirrored(img)
             img_height, img_width = img.shape[:2]
 
         if do_split:
@@ -334,7 +348,7 @@ for idx, path in enumerate(images, 1):
         else:
             rlt = rlts[0]
 
-        if args.seamless:
+        if args.seamless or args.mirror:
             rlt = crop_seamless(rlt, scale)
 
         img = rlt.astype('uint8')

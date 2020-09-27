@@ -3,7 +3,7 @@
 This fork ports features over from my ESRGAN-Bot repository. It natively allows:
 
 * In-memory splitting/merging functionality (fully seamless, recently revamped)
-* Seamless texture preservation
+* Seamless texture preservation (both tiled and mirrored)
 * Model chaining
 * Transparency preservation (2 different modes)
 * 1-bit transparency support
@@ -12,7 +12,7 @@ This fork ports features over from my ESRGAN-Bot repository. It natively allows:
 
 To change the tile size for the split/merge functionality, use the `--tile_size` argument
 
-To set your textures to seamless, use the `--seamless` flag
+To set your textures to seamless, use the `--seamless` flag. For mirrored seamless, use the `--mirror` flag.
 
 To chain models, simply put one model name after another with a `>` in between (you can also use `+` if using bash to avoid issues), such as `1xDeJpeg.pth>4xESRGAN.pth` **note: To use model chaining, model names must be the complete full name without the path included, and the models must be present in your `/models` folder. You can still use full model paths to upscale with a single model.**
 
