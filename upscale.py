@@ -333,6 +333,8 @@ for idx, path in enumerate(images, 1):
       continue
     # read image
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    if len(img.shape) < 3:
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     # img = img * 1. / np.iinfo(img.dtype).max
 
     for model_path in model_chain:
