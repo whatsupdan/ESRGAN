@@ -41,27 +41,29 @@ parser.add_argument('--alpha_mode', help='Type of alpha processing to use. 1 is 
                     type=int, nargs='?', choices=[1, 2], default=1)
 args = parser.parse_args()
 
-if '+' in args.model:
-    model_chain = args.model.split('+')
-else:
-    model_chain = args.model.split('>')
-for idx, model in enumerate(model_chain):
-    if os.path.exists(model):
-        pass
-    elif os.path.exists('./models/' + model):
-        model_chain[idx] = os.path.join('models', model)
-    elif ':' in model and '&' in model:
-        model_1 = model.split('&')[0].split(':')[0]
-        model_2 = model.split('&')[1].split(':')[1]
-        if os.path.exists(model_1) and os.path.exists(model_2):
-            pass
-        elif os.path.exists('./models/' + model_1) and os.path.exists('./models/' + model_2):
-            model = model.replace(model_1, './models/' + model_1)
-            model = model.replace(model_2, './models/' + model_2)
-            model_chain[idx] = model
+def check_model_path(model_path):
+    if os.path.exists(model_path):
+        return model_path
+    elif os.path.exists(os.path.join('./models/', model_path)):
+        return os.path.join('./models/', model_path)
     else:
         print('Error: Model [{:s}] does not exist.'.format(model))
         sys.exit(1)
+
+model_chain = args.model.split('+') if '+' in args.model else args.model.split('>')
+
+for idx, model in enumerate(model_chain):
+
+    interpolations = model.split('|') if '|' in args.model else model.split('&')
+
+    if len(interpolations) > 1:
+        for i, interpolation in enumerate(interpolations):
+            interp_model, interp_amount = interpolation.split('@') if '@' in interpolation else interpolation.split(':') 
+            interp_model = check_model_path(interp_model)
+            interpolations[i] = f'{interp_model}@{interp_amount}'
+        model_chain[idx] = '&'.join(interpolations)
+    else:
+        model_chain[idx] = check_model_path(model)
 
 if not os.path.exists(args.input):
     print('Error: Folder [{:s}] does not exist.'.format(args.input))
@@ -135,14 +137,14 @@ def upscale(imgs, model_path):
     '''
 
     if model_path != last_model:
-        if ':' in model_path and '&' in model_path: # interpolating OTF, example: 4xBox:25&4xPSNR:75
+        if (':' in model_path or '@' in model_path) and ('&' in model_path or '|' in model_path): # interpolating OTF, example: 4xBox:25&4xPSNR:75
             interps = model_path.split('&')[:2]
-            model_1 = torch.load(interps[0].split(':')[0])
-            model_2 = torch.load(interps[1].split(':')[0])
+            model_1 = torch.load(interps[0].split('@')[0])
+            model_2 = torch.load(interps[1].split('@')[0])
             state_dict = OrderedDict()
             for k, v_1 in model_1.items():
                 v_2 = model_2[k]
-                state_dict[k] = (int(interps[0].split(':')[1]) / 100) * v_1 + (int(interps[1].split(':')[1]) / 100) * v_2
+                state_dict[k] = (int(interps[0].split('@')[1]) / 100) * v_1 + (int(interps[1].split('@')[1]) / 100) * v_2
         else:
             state_dict = torch.load(model_path)
 
