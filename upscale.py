@@ -342,10 +342,12 @@ for idx, path in enumerate(images, 1):
     for model_path in model_chain:
 
         img_height, img_width = img.shape[:2]
-        dim = min(img_height, img_width, args.tile_size)
-        overlap = 16
-
-        do_split = img_height > dim or img_width > dim
+        if img_height > args.tile_size or img_width > args.tile_size:
+            dim = min(img_height, img_width, args.tile_size)
+            do_split = True
+            overlap = 16
+        else:
+            do_split = False
 
         if args.seamless and not args.mirror:
             img = make_seamless(img)
