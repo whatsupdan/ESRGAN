@@ -198,8 +198,8 @@ def recompose_tensor(patches, full_height, full_width, overlap=10):
         print("Error: The number of patches provided to the recompose function does not match the number of patches in each image.")
     final_batch_size = batch_size // n_patches
 
-    blending_in = torch.linspace(0.1, 1.0, overlap)
-    blending_out = torch.linspace(1.0, 0.1, overlap)
+    blending_in = torch.linspace(0.0, 1.0, overlap)
+    blending_out = torch.linspace(1.0, 0.0, overlap)
     middle_part = torch.ones(patch_size - 2 * overlap)
     blending_profile = torch.cat([blending_in, middle_part, blending_out], 0)
 
