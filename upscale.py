@@ -122,20 +122,8 @@ def process(img):
     output = np.transpose(output, (1, 2, 0))
     return output
 
-# This code is a somewhat modified version of BlueAmulet's fork of ESRGAN by Xinntao
-def upscale(imgs, model_path):
+def load_model(model_path):
     global last_model, last_in_nc, last_out_nc, last_nf, last_nb, last_scale, last_kind, model
-    '''
-    Runs ESRGAN on all the images passed in with the specified model
-
-            Parameters:
-                    imgs (array): The images to run ESRGAN on
-                    model_path (string): The model to use
-
-            Returns:
-                    rlts (array): The processed images
-    '''
-
     if model_path != last_model:
         if (':' in model_path or '@' in model_path) and ('&' in model_path or '|' in model_path): # interpolating OTF, example: 4xBox:25&4xPSNR:75
             interps = model_path.split('&')[:2]
@@ -228,64 +216,73 @@ def upscale(imgs, model_path):
             v.requires_grad = False
         model = model.to(device)
 
-    rlts = []
-    for img in imgs:
-        # read image
-        img = img * 1. / np.iinfo(img.dtype).max
+# This code is a somewhat modified version of BlueAmulet's fork of ESRGAN by Xinntao
+def upscale(img):
+    global last_model, last_in_nc, last_out_nc, last_nf, last_nb, last_scale, last_kind, model
+    '''
+    Upscales the image passed in with the specified model
 
-        if img.ndim == 3 and img.shape[2] == 4 and last_in_nc == 3 and last_out_nc == 3:
-            shape = img.shape
-            if args.alpha_mode == 1:
-                img1 = np.copy(img[:, :, :3])
-                img2 = np.copy(img[:, :, :3])
-                for c in range(3):
-                    img1[:, :, c] *= img[:, :, 3]
-                    img2[:, :, c] = (img2[:, :, c] - 1) * img[:, :, 3] + 1
+            Parameters:
+                    img: The image to upscale
+                    model_path (string): The model to use
 
-                output1 = process(img1)
-                output2 = process(img2)
-                alpha = 1 - np.mean(output2-output1, axis=2)
+            Returns:
+                    output: The processed image
+    '''
 
-                if args.binary_alpha:
-                    transparent = 0.
-                    opaque = 1.
-                    half_transparent = .5
-                    half_transparent_lower_bound = args.alpha_threshold - args.alpha_boundary_offset
-                    half_transparent_upper_bound = args.alpha_threshold + args.alpha_boundary_offset
-                    alpha = np.where(alpha < half_transparent_lower_bound, transparent,
-                                    np.where(alpha <= half_transparent_upper_bound,
-                                    half_transparent, opaque))
+    img = img * 1. / np.iinfo(img.dtype).max
 
-                output = np.dstack((output1, alpha))
-                shape = output1.shape
-                divalpha = np.where(alpha < 1. / 510., 1, alpha)
-                for c in range(shape[2]):
-                    output[:, :, c] /= divalpha
-                output = np.clip(output, 0, 1)
-            else:
-                img1 = np.copy(img[:, :, :3])
-                img2 = cv2.merge((img[:, :, 3], img[:, :, 3], img[:, :, 3]))
-                output1 = process(img1)
-                output2 = process(img2)
-                output = cv2.merge(
-                    (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 0])) 
+    if img.ndim == 3 and img.shape[2] == 4 and last_in_nc == 3 and last_out_nc == 3:
+        shape = img.shape
+        if args.alpha_mode == 1:
+            img1 = np.copy(img[:, :, :3])
+            img2 = np.copy(img[:, :, :3])
+            for c in range(3):
+                img1[:, :, c] *= img[:, :, 3]
+                img2[:, :, c] = (img2[:, :, c] - 1) * img[:, :, 3] + 1
+
+            output1 = process(img1)
+            output2 = process(img2)
+            alpha = 1 - np.mean(output2-output1, axis=2)
+
+            if args.binary_alpha:
+                transparent = 0.
+                opaque = 1.
+                half_transparent = .5
+                half_transparent_lower_bound = args.alpha_threshold - args.alpha_boundary_offset
+                half_transparent_upper_bound = args.alpha_threshold + args.alpha_boundary_offset
+                alpha = np.where(alpha < half_transparent_lower_bound, transparent,
+                                np.where(alpha <= half_transparent_upper_bound,
+                                half_transparent, opaque))
+
+            output = np.dstack((output1, alpha))
+            shape = output1.shape
+            divalpha = np.where(alpha < 1. / 510., 1, alpha)
+            for c in range(shape[2]):
+                output[:, :, c] /= divalpha
+            output = np.clip(output, 0, 1)
         else:
-            if img.ndim == 2:
-                img = np.tile(np.expand_dims(img, axis=2),
-                              (1, 1, min(last_in_nc, 3)))
-            if img.shape[2] > last_in_nc:  # remove extra channels
-                print('Warning: Truncating image channels')
-                img = img[:, :, :last_in_nc]
-            # pad with solid alpha channel
-            elif img.shape[2] == 3 and last_in_nc == 4:
-                img = np.dstack((img, np.full(img.shape[:-1], 1.)))
-            output = process(img)
+            img1 = np.copy(img[:, :, :3])
+            img2 = cv2.merge((img[:, :, 3], img[:, :, 3], img[:, :, 3]))
+            output1 = process(img1)
+            output2 = process(img2)
+            output = cv2.merge(
+                (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 0])) 
+    else:
+        if img.ndim == 2:
+            img = np.tile(np.expand_dims(img, axis=2),
+                            (1, 1, min(last_in_nc, 3)))
+        if img.shape[2] > last_in_nc:  # remove extra channels
+            print('Warning: Truncating image channels')
+            img = img[:, :, :last_in_nc]
+        # pad with solid alpha channel
+        elif img.shape[2] == 3 and last_in_nc == 4:
+            img = np.dstack((img, np.full(img.shape[:-1], 1.)))
+        output = process(img)
 
-        output = (output * 255.).round()
+    output = (output * 255.).round()
 
-        rlts.append(output)
-    # torch.cuda.empty_cache()
-    return rlts, upscale
+    return output
 
 
 def make_seamless(img):
@@ -342,13 +339,9 @@ for idx, path in enumerate(images, 1):
     for model_path in model_chain:
 
         img_height, img_width = img.shape[:2]
-        if img_height > args.tile_size or img_width > args.tile_size:
-            dim = min(img_height, img_width, args.tile_size)
-            do_split = True
-            overlap = 16
-        else:
-            do_split = False
 
+        # Seamless/Mirror modes
+        # TODO: Replace with OpenCV's border function
         if args.seamless and not args.mirror:
             img = make_seamless(img)
             img_height, img_width = img.shape[:2]
@@ -356,26 +349,20 @@ for idx, path in enumerate(images, 1):
             img = make_mirrored(img)
             img_height, img_width = img.shape[:2]
 
-        if do_split:
-            tensor_img = ops.np2tensor(img)
-            imgs = ops.patchify_tensor(tensor_img, dim, overlap=overlap)
-            imgs = [ops.tensor2np(img) for img in imgs]
-        else:
-            imgs = [img]
+        # Load the model so we can access the scale
+        load_model(model_path)
 
-        rlts, scale = upscale(imgs, model_path)
+        # Whether or not to perform the split/merge action
+        do_split = img_height > args.tile_size or img_width > args.tile_size
 
         if do_split:
-            rlts = [ops.np2tensor(rlt.astype('uint8')) for rlt in rlts]
-            rlts = torch.cat(rlts, 0)
-            rlt_tensor = ops.recompose_tensor(rlts, img_height * scale, img_width * scale, overlap=overlap * scale)
-            rlt = ops.tensor2np(rlt_tensor)
+            rlt = ops.esrgan_launcher_split_merge(img, upscale, last_scale, args.tile_size)
         else:
-            rlt = rlts[0]
+            rlt = upscale(img)
 
         if args.seamless or args.mirror:
-            rlt = crop_seamless(rlt, scale)
+            rlt = crop_seamless(rlt, last_scale)
 
-        img = rlt.astype('uint8')
+        rlt = rlt.astype('uint8')
 
     cv2.imwrite(os.path.join(output_folder, '{:s}.png'.format(base)), rlt)
