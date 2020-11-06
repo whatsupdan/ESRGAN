@@ -353,7 +353,7 @@ for idx, path in enumerate(images, 1):
         load_model(model_path)
 
         # Whether or not to perform the split/merge action
-        do_split = img_height > args.tile_size or img_width > args.tile_size
+        do_split = img_height > args.tile_size//last_scale or img_width > args.tile_size//last_scale
 
         if do_split:
             rlt = ops.esrgan_launcher_split_merge(img, upscale, last_scale, args.tile_size)
