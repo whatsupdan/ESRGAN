@@ -33,6 +33,8 @@ parser.add_argument('--cpu', action='store_true',
                     help='Use CPU instead of CUDA')
 parser.add_argument('--binary_alpha', action='store_true',
                     help='Whether to use a 1 bit alpha transparency channel, Useful for PSX upscaling')
+parser.add_argument('--ternary_alpha', action='store_true',
+                    help='Whether to use a 2 bit alpha transparency channel, Useful for PSX upscaling')
 parser.add_argument('--alpha_threshold', default=.5,
                     help='Only used when binary_alpha is supplied. Defines the alpha threshold for binary transparency', type=float)
 parser.add_argument('--alpha_boundary_offset', default=.2,
@@ -247,22 +249,7 @@ def upscale(img):
             output1 = process(img1)
             output2 = process(img2)
             alpha = 1 - np.mean(output2-output1, axis=2)
-
-            if args.binary_alpha:
-                transparent = 0.
-                opaque = 1.
-                half_transparent = .5
-                half_transparent_lower_bound = args.alpha_threshold - args.alpha_boundary_offset
-                half_transparent_upper_bound = args.alpha_threshold + args.alpha_boundary_offset
-                alpha = np.where(alpha < half_transparent_lower_bound, transparent,
-                                np.where(alpha <= half_transparent_upper_bound,
-                                half_transparent, opaque))
-
             output = np.dstack((output1, alpha))
-            shape = output1.shape
-            divalpha = np.where(alpha < 1. / 510., 1, alpha)
-            for c in range(shape[2]):
-                output[:, :, c] /= divalpha
             output = np.clip(output, 0, 1)
         elif args.alpha_mode == 2:
             img1 = np.copy(img[:, :, :3])
@@ -278,6 +265,21 @@ def upscale(img):
             output2 = process(img2)
             output = cv2.merge(
                 (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 2])) 
+        else:
+            img1 = np.copy(img[:, :, :3])
+            output = process(img1)
+
+        if args.binary_alpha:
+            alpha = output[:, :, 3]
+            threshold = args.alpha_threshold
+            _, alpha = cv2.threshold(alpha, threshold, 1, cv2.THRESH_BINARY)
+            output[:, :, 3] = alpha
+        elif args.ternary_alpha:
+            alpha = output[:, :, 3]
+            half_transparent_lower_bound = args.alpha_threshold - args.alpha_boundary_offset
+            half_transparent_upper_bound = args.alpha_threshold + args.alpha_boundary_offset
+            alpha = np.where(alpha < half_transparent_lower_bound, 0, np.where(alpha <= half_transparent_upper_bound, .5, 1))
+            output[:, :, 3] = alpha
     else:
         if img.ndim == 2:
             img = np.tile(np.expand_dims(img, axis=2),
