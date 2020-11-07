@@ -26,9 +26,13 @@ parser.add_argument('--skip_existing', help='Skip existing output files',
 parser.add_argument('--tile_size', default=512,
                     help='Tile size for splitting', type=int)
 parser.add_argument('--seamless', action='store_true',
-                    help='Seamless upscaling or not')
+                    help='Seamless upscaling')
 parser.add_argument('--mirror', action='store_true',
-                    help='Mirrored seamless upscaling or not')
+                    help='Mirrored seamless upscaling')
+parser.add_argument('--replicate', action='store_true',
+                    help='Replicate edge pixels for padding')
+parser.add_argument('--alpha_padding', action='store_true',
+                    help='Pad area around image with extra alpha')
 parser.add_argument('--cpu', action='store_true',
                     help='Use CPU instead of CUDA')
 parser.add_argument('--binary_alpha', action='store_true',
@@ -235,11 +239,9 @@ def upscale(img):
     img = img * 1. / np.iinfo(img.dtype).max
 
     if img.ndim == 3 and img.shape[2] == 4 and last_in_nc == 3 and last_out_nc == 3:
-        shape = img.shape
-        if args.alpha_mode == 0:
-            img1 = np.copy(img[:, :, :3])
-            output = process(img1)
-        elif args.alpha_mode == 1:
+
+        # Fill alpha with white and with black, remove the difference
+        if args.alpha_mode == 1:
             img1 = np.copy(img[:, :, :3])
             img2 = np.copy(img[:, :, :3])
             for c in range(3):
@@ -251,6 +253,7 @@ def upscale(img):
             alpha = 1 - np.mean(output2-output1, axis=2)
             output = np.dstack((output1, alpha))
             output = np.clip(output, 0, 1)
+        # Upscale the alpha channel itself as its own image
         elif args.alpha_mode == 2:
             img1 = np.copy(img[:, :, :3])
             img2 = cv2.merge((img[:, :, 3], img[:, :, 3], img[:, :, 3]))
@@ -258,6 +261,7 @@ def upscale(img):
             output2 = process(img2)
             output = cv2.merge(
                 (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 0])) 
+        # Use the alpha channel like a regular channel
         elif args.alpha_mode == 3:
             img1 = cv2.merge((img[:, :, 0], img[:, :, 1], img[:, :, 2]))
             img2 = cv2.merge((img[:, :, 1], img[:, :, 2], img[:, :, 3]))
@@ -265,9 +269,11 @@ def upscale(img):
             output2 = process(img2)
             output = cv2.merge(
                 (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 2])) 
+        # Remove alpha
         else:
             img1 = np.copy(img[:, :, :3])
             output = process(img1)
+            output = cv2.cvtColor(output, cv2.COLOR_BGR2BGRA)
 
         if args.binary_alpha:
             alpha = output[:, :, 3]
@@ -295,26 +301,6 @@ def upscale(img):
     output = (output * 255.).round()
 
     return output
-
-
-def make_seamless(img):
-    img_height, img_width = img.shape[:2]
-    img = cv2.hconcat([img, img, img])
-    img = cv2.vconcat([img, img, img])
-    y, x = img_height - 16, img_width - 16
-    h, w = img_height + 32, img_width + 32
-    img = img[y:y+h, x:x+w]
-    return img
-
-def make_mirrored(img):
-    img_height, img_width = img.shape[:2]
-    layer_1 = cv2.hconcat([cv2.flip(img, -1), cv2.flip(img, 0), cv2.flip(img, -1)])
-    layer_2 = cv2.hconcat([cv2.flip(img, 1), img, cv2.flip(img, 1)])
-    img = cv2.vconcat([layer_1, layer_2, layer_1])
-    y, x = img_height - 16, img_width - 16
-    h, w = img_height + 32, img_width + 32
-    img = img[y:y+h, x:x+w]
-    return img
 
 def crop_seamless(img, scale):
     img_height, img_width = img.shape[:2]
@@ -349,17 +335,17 @@ for idx, path in enumerate(images, 1):
     # img = img * 1. / np.iinfo(img.dtype).max
 
     for model_path in model_chain:
+        # Seamless modes
+        if args.seamless:
+            img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_WRAP)
+        elif args.mirror:
+            img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REFLECT_101)
+        elif args.replicate:
+            img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REPLICATE)
+        elif args.alpha_padding:
+            img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0])
 
         img_height, img_width = img.shape[:2]
-
-        # Seamless/Mirror modes
-        # TODO: Replace with OpenCV's border function
-        if args.seamless and not args.mirror:
-            img = make_seamless(img)
-            img_height, img_width = img.shape[:2]
-        elif args.mirror:
-            img = make_mirrored(img)
-            img_height, img_width = img.shape[:2]
 
         # Load the model so we can access the scale
         load_model(model_path)
@@ -372,7 +358,7 @@ for idx, path in enumerate(images, 1):
         else:
             rlt = upscale(img)
 
-        if args.seamless or args.mirror:
+        if args.seamless or args.mirror or args.replicate or args.alpha_padding:
             rlt = crop_seamless(rlt, last_scale)
 
         rlt = rlt.astype('uint8')
