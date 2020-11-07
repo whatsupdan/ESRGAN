@@ -37,8 +37,8 @@ parser.add_argument('--alpha_threshold', default=.5,
                     help='Only used when binary_alpha is supplied. Defines the alpha threshold for binary transparency', type=float)
 parser.add_argument('--alpha_boundary_offset', default=.2,
                     help='Only used when binary_alpha is supplied. Determines the offset boundary from the alpha threshold for half transparency.', type=float)
-parser.add_argument('--alpha_mode', help='Type of alpha processing to use. 1 is BA\'s difference method (this fork\'s default, which is necessary for using the binary alpha settings) and 2 is upscaling the alpha channel separately (like IEU).', 
-                    type=int, nargs='?', choices=[1, 2], default=1)
+parser.add_argument('--alpha_mode', help='Type of alpha processing to use. 0 is no alpha processing. 1 is BA\'s difference method (necessary for using the binary alpha settings). 2 is upscaling the alpha channel separately (like IEU). 3 is swapping an existing channel with the alpha channel.', 
+                    type=int, nargs='?', choices=[0, 1, 2, 3], default=0)
 args = parser.parse_args()
 
 def check_model_path(model_path):
@@ -234,7 +234,10 @@ def upscale(img):
 
     if img.ndim == 3 and img.shape[2] == 4 and last_in_nc == 3 and last_out_nc == 3:
         shape = img.shape
-        if args.alpha_mode == 1:
+        if args.alpha_mode == 0:
+            img1 = np.copy(img[:, :, :3])
+            output = process(img1)
+        elif args.alpha_mode == 1:
             img1 = np.copy(img[:, :, :3])
             img2 = np.copy(img[:, :, :3])
             for c in range(3):
@@ -261,13 +264,20 @@ def upscale(img):
             for c in range(shape[2]):
                 output[:, :, c] /= divalpha
             output = np.clip(output, 0, 1)
-        else:
+        elif args.alpha_mode == 2:
             img1 = np.copy(img[:, :, :3])
             img2 = cv2.merge((img[:, :, 3], img[:, :, 3], img[:, :, 3]))
             output1 = process(img1)
             output2 = process(img2)
             output = cv2.merge(
                 (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 0])) 
+        elif args.alpha_mode == 3:
+            img1 = cv2.merge((img[:, :, 0], img[:, :, 1], img[:, :, 2]))
+            img2 = cv2.merge((img[:, :, 1], img[:, :, 2], img[:, :, 3]))
+            output1 = process(img1)
+            output2 = process(img2)
+            output = cv2.merge(
+                (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 2])) 
     else:
         if img.ndim == 2:
             img = np.tile(np.expand_dims(img, axis=2),
