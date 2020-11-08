@@ -13,16 +13,12 @@ import utils.architecture as arch
 import utils.dataops as ops
 
 parser = argparse.ArgumentParser()
-parser.register('type', bool, (lambda x: x.lower()
-                               in ("true")))
 parser.add_argument('model')
 parser.add_argument('--input', default='input', help='Input folder')
-parser.add_argument('--output', default='output',
-                    help='Output folder')
-parser.add_argument('--reverse', help='Reverse Order', default=False,
-                    action="store_true")
-parser.add_argument('--skip_existing', help='Skip existing output files',
-                    default=False, action="store_true")
+parser.add_argument('--output', default='output', help='Output folder')
+parser.add_argument('--reverse', help='Reverse Order', action="store_true")
+parser.add_argument('--skip_existing', action="store_true",
+                    help='Skip existing output files')
 parser.add_argument('--tile_size', default=512,
                     help='Tile size for splitting', type=int)
 parser.add_argument('--seamless', action='store_true',
@@ -43,7 +39,7 @@ parser.add_argument('--alpha_threshold', default=.5,
                     help='Only used when binary_alpha is supplied. Defines the alpha threshold for binary transparency', type=float)
 parser.add_argument('--alpha_boundary_offset', default=.2,
                     help='Only used when binary_alpha is supplied. Determines the offset boundary from the alpha threshold for half transparency.', type=float)
-parser.add_argument('--alpha_mode', help='Type of alpha processing to use. 0 is no alpha processing. 1 is BA\'s difference method (necessary for using the binary alpha settings). 2 is upscaling the alpha channel separately (like IEU). 3 is swapping an existing channel with the alpha channel.', 
+parser.add_argument('--alpha_mode', help='Type of alpha processing to use. 0 is no alpha processing. 1 is BA\'s difference method. 2 is upscaling the alpha channel separately (like IEU). 3 is swapping an existing channel with the alpha channel.', 
                     type=int, nargs='?', choices=[0, 1, 2, 3], default=0)
 args = parser.parse_args()
 
@@ -361,6 +357,6 @@ for idx, path in enumerate(images, 1):
         if args.seamless or args.mirror or args.replicate or args.alpha_padding:
             rlt = crop_seamless(rlt, last_scale)
 
-        rlt = rlt.astype('uint8')
+        img = rlt.astype('uint8')
 
     cv2.imwrite(os.path.join(output_folder, '{:s}.png'.format(base)), rlt)
