@@ -9,12 +9,15 @@ This fork ports features over from my ESRGAN-Bot repository and adds a few more.
 * 1-bit transparency support (with half transparency as well)
 * Both new-arch and old-arch models
 * SPSR models
+* On-the-fly interpolation
 
 To change the tile size for the split/merge functionality, use the `--tile_size` argument. This was recently changed to scale with the scale of the model used to more consistently not run out of VRAM, so you may need to play around with it to find your new maximum value.
 
 To set your textures to seamless, use the `--seamless` flag. For mirrored seamless, use the `--mirror` flag. You can also add pixel-replication padding using `--replicate` and alpha padding using `--alpha_padding`. You cannot use more than one of these at once.
 
 To chain models, simply put one model name after another with a `>` in between (you can also use `+` if using bash to avoid issues), such as `1xDeJpeg.pth>4xESRGAN.pth` **note: To use model chaining, model names must be the complete full name without the path included, and the models must be present in your `/models` folder. You can still use full model paths to upscale with a single model.**
+
+For on-the-fly interpolation, you use this syntax: `<model1_name>:<##>&<model2_name>:<##>`, where the model name is the path to the model and ## is the numerical percentage to interpolate by. For example, `model1:50&model2:50` would interpolate model1 and model2 by 50 each. The numbers should add up to 100. If you have trouble using `:` or `&`, either try putting the interpolation string in quotes or use `@` or `|` respectively (`"model1@50|model2@50"`).
 
 To use 1 bit binary alpha transparency, set the `--binary_alpha` flag to True. When using `--binary_alpha` transparency, provide the optional `--alpha_threshold` to specify the alpha transparency threshold. 1 bit binary transparency is useful when upscaling images that require that the end result has 1 bit transparency, e.g. PSX games. If you want to include half transparency, use `--ternary_alpha` instead, which allows you to set the `--alpha_boundary_offset` threshold.
 
@@ -32,3 +35,5 @@ Examples:
 * `python upscale.py 1xSSAntiAlias9x.pth>4xBox.pth --tile_size 512`
 * `python upscale.py 4xBox.pth --binary_alpha --alpha_threshold .2`
 * `python upscale.py /models/4xBox.pth`
+
+If you want a GUI for ESRGAN and if you're on Windows, check out [Cupscale](https://github.com/n00mkrad/cupscale/). It implements most of this fork's features as well as other utilities around it.
