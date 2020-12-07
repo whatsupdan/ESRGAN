@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import math
+import gc
 
 def bgr_to_rgb(image: torch.Tensor) -> torch.Tensor:
     # flip image channels
@@ -20,67 +20,55 @@ def rgba_to_bgra(image: torch.Tensor) -> torch.Tensor:
     #same operation as bgra_to_rgba(), flip image channels
     return bgra_to_rgba(image)
 
-# from https://github.com/ata4/esrgan-launcher/blob/master/upscale.py
-def esrgan_launcher_split_merge(input_image, upscale_function, scale_factor=4, tile_size=512, tile_padding=0.125):
-    width, height, depth = input_image.shape
-    output_width = width * scale_factor
-    output_height = height * scale_factor
-    output_shape = (output_width, output_height, depth)
+def auto_split_upscale(lr_img, upscale_function, scale=4, overlap=32):
+    failed = False
+    try:
+        result = upscale_function(lr_img)
+        return result
+    except RuntimeError as e:
+        # Check to see if its actually the CUDA out of memory error
+        if 'allocate' in str(e):
+            failed = True
+            # Collect garbage
+            torch.cuda.empty_cache()
+            gc.collect()
+        # Re-raise the exception if not. I have no idea if this will ever be called but its here just in case
+        else:
+            raise RuntimeError(e)
+    finally:
+        # Collect garbage again just in case
+        gc.collect()
+        torch.cuda.empty_cache()
 
-    # start with black image
-    output_image = np.zeros(output_shape, np.uint8)
+    if failed:
+        h, w, c = lr_img.shape
 
-    tile_padding = math.ceil(tile_size * tile_padding)
-    tile_size = math.ceil(tile_size / scale_factor)
+        # Split image into 4ths
+        top_left = lr_img[:h//2 + overlap, :w//2 + overlap, :]
+        top_right = lr_img[:h//2 + overlap, w//2 - overlap:, :]
+        bottom_left = lr_img[h//2 - overlap:, :w//2 + overlap, :]
+        bottom_right = lr_img[h//2 - overlap:, w//2 - overlap:, :]
+        splits = [top_left, top_right, bottom_left, bottom_right]
 
-    tiles_x = math.ceil(width / tile_size)
-    tiles_y = math.ceil(height / tile_size)
+        # Recursively upscale the quadrants
+        top_left_rlt = auto_split_upscale(top_left, upscale_function, scale=scale, overlap=overlap)
+        top_right_rlt = auto_split_upscale(top_right, upscale_function, scale=scale, overlap=overlap)
+        bottom_left_rlt = auto_split_upscale(bottom_left, upscale_function, scale=scale, overlap=overlap)
+        bottom_right_rlt = auto_split_upscale(bottom_right, upscale_function, scale=scale, overlap=overlap)
 
-    for y in range(tiles_y):
-        for x in range(tiles_x):
-            # extract tile from input image
-            ofs_x = x * tile_size
-            ofs_y = y * tile_size
+        # Define output shape
+        out_h = h * scale
+        out_w = w * scale
+        out_c = c
+        out_overlap = overlap * scale
 
-            # input tile area on total image
-            input_start_x = ofs_x
-            input_end_x = min(ofs_x + tile_size, width)
+        # Create blank output image
+        output_img = np.zeros((out_h, out_w, out_c), np.uint8)
 
-            input_start_y = ofs_y
-            input_end_y = min(ofs_y + tile_size, height)
+        # Fill output image with tiles
+        output_img[:out_h//2 + out_overlap//2, :out_w//2 + out_overlap//2, :] = top_left_rlt[:-out_overlap//2, :-out_overlap//2, :]
+        output_img[:out_h//2 + out_overlap//2, out_w//2 - out_overlap//2:, :] = top_right_rlt[:-out_overlap//2, out_overlap//2:, :]
+        output_img[out_h//2 - out_overlap//2:, :out_w//2 + out_overlap//2, :] = bottom_left_rlt[out_overlap//2:, :-out_overlap//2, :]
+        output_img[out_h//2 - out_overlap//2:, out_w//2 - out_overlap//2:, :] = bottom_right_rlt[out_overlap//2:, out_overlap//2:, :]
 
-            # input tile area on total image with padding
-            input_start_x_pad = max(input_start_x - tile_padding, 0)
-            input_end_x_pad = min(input_end_x + tile_padding, width)
-
-            input_start_y_pad = max(input_start_y - tile_padding, 0)
-            input_end_y_pad = min(input_end_y + tile_padding, height)
-
-            # input tile dimensions
-            input_tile_width = input_end_x - input_start_x
-            input_tile_height = input_end_y - input_start_y
-
-            input_tile = input_image[input_start_x_pad:input_end_x_pad, input_start_y_pad:input_end_y_pad]
-
-            # upscale tile
-            output_tile = upscale_function(input_tile)
-
-            # output tile area on total image
-            output_start_x = input_start_x * scale_factor
-            output_end_x = input_end_x * scale_factor
-
-            output_start_y = input_start_y * scale_factor
-            output_end_y = input_end_y * scale_factor
-
-            # output tile area without padding
-            output_start_x_tile = (input_start_x - input_start_x_pad) * scale_factor
-            output_end_x_tile = output_start_x_tile + input_tile_width * scale_factor
-
-            output_start_y_tile = (input_start_y - input_start_y_pad) * scale_factor
-            output_end_y_tile = output_start_y_tile + input_tile_height * scale_factor
-
-            # put tile into output image
-            output_image[output_start_x:output_end_x, output_start_y:output_end_y] = \
-                output_tile[output_start_x_tile:output_end_x_tile, output_start_y_tile:output_end_y_tile]
-
-    return output_image
+        return output_img

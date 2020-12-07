@@ -19,16 +19,8 @@ parser.add_argument('--output', default='output', help='Output folder')
 parser.add_argument('--reverse', help='Reverse Order', action="store_true")
 parser.add_argument('--skip_existing', action="store_true",
                     help='Skip existing output files')
-parser.add_argument('--tile_size', default=512,
-                    help='Tile size for splitting', type=int)
-parser.add_argument('--seamless', action='store_true',
-                    help='Seamless upscaling')
-parser.add_argument('--mirror', action='store_true',
-                    help='Mirrored seamless upscaling')
-parser.add_argument('--replicate', action='store_true',
-                    help='Replicate edge pixels for padding')
-parser.add_argument('--alpha_padding', action='store_true',
-                    help='Pad area around image with extra alpha')
+parser.add_argument('--seamless', nargs='?', choices=['tile', 'mirror', 'replicate', 'alpha_pad'], default=None,
+                    help='Helps seamlessly upscale an image. Tile = repeating along edges. Mirror = reflected along edges. Replicate = extended pixels along edges. Alpha pad = extended alpha border.')
 parser.add_argument('--cpu', action='store_true',
                     help='Use CPU instead of CUDA')
 parser.add_argument('--binary_alpha', action='store_true',
@@ -328,17 +320,16 @@ for idx, path in enumerate(images, 1):
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
     if len(img.shape) < 3:
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    # img = img * 1. / np.iinfo(img.dtype).max
 
     for model_path in model_chain:
         # Seamless modes
-        if args.seamless:
+        if args.seamless == 'tile':
             img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_WRAP)
-        elif args.mirror:
+        elif args.seamless == 'mirror':
             img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REFLECT_101)
-        elif args.replicate:
+        elif args.seamless == 'replicate':
             img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REPLICATE)
-        elif args.alpha_padding:
+        elif args.seamless == 'alpha_pad':
             img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0])
 
         img_height, img_width = img.shape[:2]
@@ -346,17 +337,12 @@ for idx, path in enumerate(images, 1):
         # Load the model so we can access the scale
         load_model(model_path)
 
-        # Whether or not to perform the split/merge action
-        do_split = img_height > args.tile_size//last_scale or img_width > args.tile_size//last_scale
+        rlt = ops.auto_split_upscale(img, upscale, last_scale)
 
-        if do_split:
-            rlt = ops.esrgan_launcher_split_merge(img, upscale, last_scale, args.tile_size)
-        else:
-            rlt = upscale(img)
-
-        if args.seamless or args.mirror or args.replicate or args.alpha_padding:
+        if args.seamless:
             rlt = crop_seamless(rlt, last_scale)
 
+        # This is for model chaining
         img = rlt.astype('uint8')
 
     cv2.imwrite(os.path.join(output_folder, '{:s}.png'.format(base)), rlt)

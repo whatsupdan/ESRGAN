@@ -2,17 +2,17 @@
 
 This fork ports features over from my ESRGAN-Bot repository and adds a few more. It natively allows:
 
-* In-memory splitting/merging functionality (fully seamless, recently revamped again)
+* In-memory splitting/merging functionality (fully seamless, recently revamped for the third time and no longer requires tile size)
 * Seamless texture preservation (both tiled and mirrored)
 * Model chaining
 * Transparency preservation (3 different modes)
 * 1-bit transparency support (with half transparency as well)
 * Both new-arch and old-arch models
-* SPSR models
+* Regular and SPSR models, of any scale or internal model settings
 
-To change the tile size for the split/merge functionality, use the `--tile_size` argument. This was recently changed to scale with the scale of the model used to more consistently not run out of VRAM, so you may need to play around with it to find your new maximum value.
+**Tile size was recently removed! It is no longer needed for split/merge functionality!**
 
-To set your textures to seamless, use the `--seamless` flag. For mirrored seamless, use the `--mirror` flag. You can also add pixel-replication padding using `--replicate` and alpha padding using `--alpha_padding`. You cannot use more than one of these at once.
+To set your textures to seamless, use the `--seamless` flag. For regular tiled seamless mode, use `--seamless tile`. For mirrored seamless mode, use `--seamless mirror`. You can also add pixel-replication padding using `--seamless replicate` and alpha padding using `--seamless alpha_pad`.
 
 To chain models, simply put one model name after another with a `>` in between (you can also use `+` if using bash to avoid issues), such as `1xDeJpeg.pth>4xESRGAN.pth` **note: To use model chaining, model names must be the complete full name without the path included, and the models must be present in your `/models` folder. You can still use full model paths to upscale with a single model.**
 
@@ -28,7 +28,7 @@ To process images in reverse order, use `--reverse`. If needed, you can also ski
 
 Examples:
 
-* `python upscale.py 4xBox.pth --seamless`
-* `python upscale.py 1xSSAntiAlias9x.pth>4xBox.pth --tile_size 512`
+* `python upscale.py 4xBox.pth --seamless tile`
+* `python upscale.py 1xSSAntiAlias9x.pth>4xBox.pth`
 * `python upscale.py 4xBox.pth --binary_alpha --alpha_threshold .2`
 * `python upscale.py /models/4xBox.pth`
