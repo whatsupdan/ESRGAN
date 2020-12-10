@@ -29,6 +29,8 @@ The default alpha mode is now 0 (ignore alpha). There are also now 3 other modes
 
 To process images in reverse order, use `--reverse`. If needed, you can also skip existing files by using `--skip_existing`.
 
+If you're upscaling images of the same size, you can do `--cache_max_split_depth` to only calculate the automatic tile size once to improve performance.
+
 Examples:
 
 * `python upscale.py 4xBox.pth --seamless tile`

@@ -23,6 +23,8 @@ parser.add_argument('--seamless', nargs='?', choices=['tile', 'mirror', 'replica
                     help='Helps seamlessly upscale an image. Tile = repeating along edges. Mirror = reflected along edges. Replicate = extended pixels along edges. Alpha pad = extended alpha border.')
 parser.add_argument('--cpu', action='store_true',
                     help='Use CPU instead of CUDA')
+parser.add_argument('--cache_max_split_depth', action='store_true',
+                    help='Caches the maximum recursion depth used by the split/merge function. Useful only when upscaling images of the same size.')
 parser.add_argument('--binary_alpha', action='store_true',
                     help='Whether to use a 1 bit alpha transparency channel, Useful for PSX upscaling')
 parser.add_argument('--ternary_alpha', action='store_true',
@@ -307,6 +309,11 @@ for root, _, files in os.walk(input_folder):
     for file in sorted(files, reverse=args.reverse):
         if file.split('.')[-1].lower() in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tga']:
             images.append(os.path.join(root, file))
+
+# Store the maximum split depths for each model in the chain
+# TODO: there might be a better way of doing this but it's good enough for now
+split_depths =  {}
+
 for idx, path in enumerate(images, 1):
     base = os.path.splitext(os.path.relpath(path, input_folder))[0]
     output_dir = os.path.dirname(os.path.join(output_folder, base))
@@ -321,28 +328,36 @@ for idx, path in enumerate(images, 1):
     if len(img.shape) < 3:
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
-    for model_path in model_chain:
-        # Seamless modes
-        if args.seamless == 'tile':
-            img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_WRAP)
-        elif args.seamless == 'mirror':
-            img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REFLECT_101)
-        elif args.seamless == 'replicate':
-            img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REPLICATE)
-        elif args.seamless == 'alpha_pad':
-            img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0])
+    # Seamless modes
+    if args.seamless == 'tile':
+        img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_WRAP)
+    elif args.seamless == 'mirror':
+        img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REFLECT_101)
+    elif args.seamless == 'replicate':
+        img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REPLICATE)
+    elif args.seamless == 'alpha_pad':
+        img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0])
+    final_scale = 1
 
+    for i, model_path in enumerate(model_chain):
+        
         img_height, img_width = img.shape[:2]
 
         # Load the model so we can access the scale
         load_model(model_path)
 
-        rlt = ops.auto_split_upscale(img, upscale, last_scale)
+        if args.cache_max_split_depth and len(split_depths.keys()) > 0:
+            rlt = ops.split_known_depth(img, upscale, last_scale, max_depth=split_depths[i])
+        else:
+            rlt, depth = ops.auto_split_upscale(img, upscale, last_scale)
+            split_depths[i] = depth
 
-        if args.seamless:
-            rlt = crop_seamless(rlt, last_scale)
+        final_scale *= last_scale
 
         # This is for model chaining
         img = rlt.astype('uint8')
+
+    if args.seamless:
+        rlt = crop_seamless(rlt, final_scale)
 
     cv2.imwrite(os.path.join(output_folder, '{:s}.png'.format(base)), rlt)
