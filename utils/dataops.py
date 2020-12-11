@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import gc
+import math
 
 def bgr_to_rgb(image: torch.Tensor) -> torch.Tensor:
     # flip image channels
@@ -45,10 +46,9 @@ def auto_split_upscale(lr_img, upscale_function, scale=4, overlap=32, current_de
 
         # Split image into 4ths
         top_left = lr_img[:h//2 + overlap, :w//2 + overlap, :]
-        top_right = lr_img[:h//2 + overlap, w//2 - overlap:, :]
-        bottom_left = lr_img[h//2 - overlap:, :w//2 + overlap, :]
-        bottom_right = lr_img[h//2 - overlap:, w//2 - overlap:, :]
-        splits = [top_left, top_right, bottom_left, bottom_right]
+        top_right = lr_img[:h//2 + overlap, math.ceil(w/2) - overlap:, :]
+        bottom_left = lr_img[math.ceil(h/2) - overlap:, :w//2 + overlap, :]
+        bottom_right = lr_img[math.ceil(h/2) - overlap:, math.ceil(w/2) - overlap:, :]
 
         # Recursively upscale the quadrants
         # After we go through the top left quadrant, we know the maximum depth and no longer need to test for out-of-memory
@@ -68,9 +68,9 @@ def auto_split_upscale(lr_img, upscale_function, scale=4, overlap=32, current_de
 
         # Fill output image with tiles
         output_img[:out_h//2 + out_overlap//2, :out_w//2 + out_overlap//2, :] = top_left_rlt[:-out_overlap//2, :-out_overlap//2, :]
-        output_img[:out_h//2 + out_overlap//2, out_w//2 - out_overlap//2:, :] = top_right_rlt[:-out_overlap//2, out_overlap//2:, :]
-        output_img[out_h//2 - out_overlap//2:, :out_w//2 + out_overlap//2, :] = bottom_left_rlt[out_overlap//2:, :-out_overlap//2, :]
-        output_img[out_h//2 - out_overlap//2:, out_w//2 - out_overlap//2:, :] = bottom_right_rlt[out_overlap//2:, out_overlap//2:, :]
+        output_img[:out_h//2 + out_overlap//2, math.ceil(out_w/2) - out_overlap//2:, :] = top_right_rlt[:-out_overlap//2, out_overlap//2:, :]
+        output_img[math.ceil(out_h/2) - out_overlap//2:, :out_w//2 + out_overlap//2, :] = bottom_left_rlt[out_overlap//2:, :-out_overlap//2, :]
+        output_img[math.ceil(out_h/2) - out_overlap//2:, math.ceil(out_w/2) - out_overlap//2:, :] = bottom_right_rlt[out_overlap//2:, out_overlap//2:, :]
 
         torch.cuda.empty_cache()
         gc.collect()
@@ -86,9 +86,9 @@ def split_known_depth(lr_img, upscale_function, scale=4, overlap=32, max_depth=1
 
         # Split image into 4ths
         top_left = lr_img[:h//2 + overlap, :w//2 + overlap, :]
-        top_right = lr_img[:h//2 + overlap, w//2 - overlap:, :]
-        bottom_left = lr_img[h//2 - overlap:, :w//2 + overlap, :]
-        bottom_right = lr_img[h//2 - overlap:, w//2 - overlap:, :]
+        top_right = lr_img[:h//2 + overlap, math.ceil(w/2) - overlap:, :]
+        bottom_left = lr_img[math.ceil(h/2) - overlap:, :w//2 + overlap, :]
+        bottom_right = lr_img[math.ceil(h/2) - overlap:, math.ceil(w/2) - overlap:, :]
 
         # Recursively upscale the quadrants
         top_left_rlt = split_known_depth(top_left, upscale_function, scale=scale, overlap=overlap, max_depth=max_depth, current_depth=current_depth+1)
@@ -107,8 +107,8 @@ def split_known_depth(lr_img, upscale_function, scale=4, overlap=32, max_depth=1
 
         # Fill output image with tiles
         output_img[:out_h//2 + out_overlap//2, :out_w//2 + out_overlap//2, :] = top_left_rlt[:-out_overlap//2, :-out_overlap//2, :]
-        output_img[:out_h//2 + out_overlap//2, out_w//2 - out_overlap//2:, :] = top_right_rlt[:-out_overlap//2, out_overlap//2:, :]
-        output_img[out_h//2 - out_overlap//2:, :out_w//2 + out_overlap//2, :] = bottom_left_rlt[out_overlap//2:, :-out_overlap//2, :]
-        output_img[out_h//2 - out_overlap//2:, out_w//2 - out_overlap//2:, :] = bottom_right_rlt[out_overlap//2:, out_overlap//2:, :]
+        output_img[:out_h//2 + out_overlap//2, math.ceil(out_w/2) - out_overlap//2:, :] = top_right_rlt[:-out_overlap//2, out_overlap//2:, :]
+        output_img[math.ceil(out_h/2) - out_overlap//2:, :out_w//2 + out_overlap//2, :] = bottom_left_rlt[out_overlap//2:, :-out_overlap//2, :]
+        output_img[math.ceil(out_h/2) - out_overlap//2:, math.ceil(out_w/2) - out_overlap//2:, :] = bottom_right_rlt[out_overlap//2:, out_overlap//2:, :]
 
         return output_img
