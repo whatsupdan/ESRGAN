@@ -23,6 +23,8 @@ parser.add_argument('--seamless', nargs='?', choices=['tile', 'mirror', 'replica
                     help='Helps seamlessly upscale an image. Tile = repeating along edges. Mirror = reflected along edges. Replicate = extended pixels along edges. Alpha pad = extended alpha border.')
 parser.add_argument('--cpu', action='store_true',
                     help='Use CPU instead of CUDA')
+parser.add_argument('--device_id', help='The numerical ID of the GPU you want to use. Defaults to 0.', 
+                    type=int, nargs='?', default=0)
 parser.add_argument('--cache_max_split_depth', action='store_true',
                     help='Caches the maximum recursion depth used by the split/merge function. Useful only when upscaling images of the same size.')
 parser.add_argument('--binary_alpha', action='store_true',
@@ -73,7 +75,7 @@ elif os.path.isfile(args.output):
 elif not os.path.exists(args.output):
     os.mkdir(args.output)
 
-device = torch.device('cpu' if args.cpu else 'cuda')
+device = torch.device('cpu' if args.cpu else f'cuda:{args.device_id}')
 
 input_folder = os.path.normpath(args.input)
 output_folder = os.path.normpath(args.output)
