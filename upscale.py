@@ -349,7 +349,7 @@ for idx, path in enumerate(images, 1):
         load_model(model_path)
 
         if args.cache_max_split_depth and len(split_depths.keys()) > 0:
-            rlt = ops.auto_split_upscale(img, upscale, last_scale, max_depth=split_depths[i])
+            rlt, depth = ops.auto_split_upscale(img, upscale, last_scale, max_depth=split_depths[i])
         else:
             rlt, depth = ops.auto_split_upscale(img, upscale, last_scale)
             split_depths[i] = depth
