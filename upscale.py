@@ -206,6 +206,7 @@ def load_model(model_path):
             last_nb = nb
             last_scale = upscale
             last_kind = kind
+            last_model = model_path
 
         model.load_state_dict(state_dict, strict=True)
         del state_dict
