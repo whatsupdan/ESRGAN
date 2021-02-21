@@ -23,7 +23,9 @@ parser.add_argument('--seamless', nargs='?', choices=['tile', 'mirror', 'replica
                     help='Helps seamlessly upscale an image. Tile = repeating along edges. Mirror = reflected along edges. Replicate = extended pixels along edges. Alpha pad = extended alpha border.')
 parser.add_argument('--cpu', action='store_true',
                     help='Use CPU instead of CUDA')
-parser.add_argument('--device_id', help='The numerical ID of the GPU you want to use. Defaults to 0.', 
+parser.add_argument('--fp16', action='store_true',
+                    help='Use FloatingPoint16/Halftensor type for images')
+parser.add_argument('--device_id', help='The numerical ID of the GPU you want to use. Defaults to 0.',
                     type=int, nargs='?', default=0)
 parser.add_argument('--cache_max_split_depth', action='store_true',
                     help='Caches the maximum recursion depth used by the split/merge function. Useful only when upscaling images of the same size.')
@@ -35,9 +37,10 @@ parser.add_argument('--alpha_threshold', default=.5,
                     help='Only used when binary_alpha is supplied. Defines the alpha threshold for binary transparency', type=float)
 parser.add_argument('--alpha_boundary_offset', default=.2,
                     help='Only used when binary_alpha is supplied. Determines the offset boundary from the alpha threshold for half transparency.', type=float)
-parser.add_argument('--alpha_mode', help='Type of alpha processing to use. 0 is no alpha processing. 1 is BA\'s difference method. 2 is upscaling the alpha channel separately (like IEU). 3 is swapping an existing channel with the alpha channel.', 
+parser.add_argument('--alpha_mode', help='Type of alpha processing to use. 0 is no alpha processing. 1 is BA\'s difference method. 2 is upscaling the alpha channel separately (like IEU). 3 is swapping an existing channel with the alpha channel.',
                     type=int, nargs='?', choices=[0, 1, 2, 3], default=0)
 args = parser.parse_args()
+
 
 def check_model_path(model_path):
     if os.path.exists(model_path):
@@ -48,15 +51,19 @@ def check_model_path(model_path):
         print('Error: Model [{:s}] does not exist.'.format(model))
         sys.exit(1)
 
-model_chain = args.model.split('+') if '+' in args.model else args.model.split('>')
+
+model_chain = args.model.split(
+    '+') if '+' in args.model else args.model.split('>')
 
 for idx, model in enumerate(model_chain):
 
-    interpolations = model.split('|') if '|' in args.model else model.split('&')
+    interpolations = model.split(
+        '|') if '|' in args.model else model.split('&')
 
     if len(interpolations) > 1:
         for i, interpolation in enumerate(interpolations):
-            interp_model, interp_amount = interpolation.split('@') if '@' in interpolation else interpolation.split(':') 
+            interp_model, interp_amount = interpolation.split(
+                '@') if '@' in interpolation else interpolation.split(':')
             interp_model = check_model_path(interp_model)
             interpolations[i] = f'{interp_model}@{interp_amount}'
         model_chain[idx] = '&'.join(interpolations)
@@ -77,6 +84,9 @@ elif not os.path.exists(args.output):
 
 device = torch.device('cpu' if args.cpu else f'cuda:{args.device_id}')
 
+if args.fp16:
+    torch.set_default_tensor_type(torch.HalfTensor)
+
 input_folder = os.path.normpath(args.input)
 output_folder = os.path.normpath(args.output)
 
@@ -93,6 +103,7 @@ model = None
 
 # This code is a somewhat modified version of BlueAmulet's fork of ESRGAN by Xinntao
 
+
 def process(img):
     '''
     Does the processing part of ESRGAN. This method only exists because the same block of code needs to be ran twice for images with transparency.
@@ -108,6 +119,8 @@ def process(img):
     elif img.shape[2] == 4:
         img = img[:, :, [2, 1, 0, 3]]
     img = torch.from_numpy(np.transpose(img, (2, 0, 1))).float()
+    if args.fp16:
+        img = img.half()
     img_LR = img.unsqueeze(0)
     img_LR = img_LR.to(device)
 
@@ -120,17 +133,20 @@ def process(img):
     output = np.transpose(output, (1, 2, 0))
     return output
 
+
 def load_model(model_path):
     global last_model, last_in_nc, last_out_nc, last_nf, last_nb, last_scale, last_kind, model
     if model_path != last_model:
-        if (':' in model_path or '@' in model_path) and ('&' in model_path or '|' in model_path): # interpolating OTF, example: 4xBox:25&4xPSNR:75
+        # interpolating OTF, example: 4xBox:25&4xPSNR:75
+        if (':' in model_path or '@' in model_path) and ('&' in model_path or '|' in model_path):
             interps = model_path.split('&')[:2]
             model_1 = torch.load(interps[0].split('@')[0])
             model_2 = torch.load(interps[1].split('@')[0])
             state_dict = OrderedDict()
             for k, v_1 in model_1.items():
                 v_2 = model_2[k]
-                state_dict[k] = (int(interps[0].split('@')[1]) / 100) * v_1 + (int(interps[1].split('@')[1]) / 100) * v_2
+                state_dict[k] = (int(interps[0].split('@')[1]) / 100) * \
+                    v_1 + (int(interps[1].split('@')[1]) / 100) * v_2
         else:
             state_dict = torch.load(model_path)
 
@@ -216,6 +232,8 @@ def load_model(model_path):
         model = model.to(device)
 
 # This code is a somewhat modified version of BlueAmulet's fork of ESRGAN by Xinntao
+
+
 def upscale(img):
     global last_model, last_in_nc, last_out_nc, last_nf, last_nb, last_scale, last_kind, model
     '''
@@ -253,7 +271,7 @@ def upscale(img):
             output1 = process(img1)
             output2 = process(img2)
             output = cv2.merge(
-                (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 0])) 
+                (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 0]))
         # Use the alpha channel like a regular channel
         elif args.alpha_mode == 3:
             img1 = cv2.merge((img[:, :, 0], img[:, :, 1], img[:, :, 2]))
@@ -261,7 +279,7 @@ def upscale(img):
             output1 = process(img1)
             output2 = process(img2)
             output = cv2.merge(
-                (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 2])) 
+                (output1[:, :, 0], output1[:, :, 1], output1[:, :, 2], output2[:, :, 2]))
         # Remove alpha
         else:
             img1 = np.copy(img[:, :, :3])
@@ -277,12 +295,13 @@ def upscale(img):
             alpha = output[:, :, 3]
             half_transparent_lower_bound = args.alpha_threshold - args.alpha_boundary_offset
             half_transparent_upper_bound = args.alpha_threshold + args.alpha_boundary_offset
-            alpha = np.where(alpha < half_transparent_lower_bound, 0, np.where(alpha <= half_transparent_upper_bound, .5, 1))
+            alpha = np.where(alpha < half_transparent_lower_bound, 0, np.where(
+                alpha <= half_transparent_upper_bound, .5, 1))
             output[:, :, 3] = alpha
     else:
         if img.ndim == 2:
             img = np.tile(np.expand_dims(img, axis=2),
-                            (1, 1, min(last_in_nc, 3)))
+                          (1, 1, min(last_in_nc, 3)))
         if img.shape[2] > last_in_nc:  # remove extra channels
             print('Warning: Truncating image channels')
             img = img[:, :, :last_in_nc]
@@ -294,6 +313,7 @@ def upscale(img):
     output = (output * 255.).round()
 
     return output
+
 
 def crop_seamless(img, scale):
     img_height, img_width = img.shape[:2]
@@ -307,7 +327,7 @@ print('Model{:s}: {:s}\nUpscaling...'.format(
       's' if len(model_chain) > 1 else '',
       ', '.join([os.path.splitext(os.path.basename(x))[0] for x in model_chain])))
 
-images=[]
+images = []
 for root, _, files in os.walk(input_folder):
     for file in sorted(files, reverse=args.reverse):
         if file.split('.')[-1].lower() in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tga']:
@@ -315,7 +335,7 @@ for root, _, files in os.walk(input_folder):
 
 # Store the maximum split depths for each model in the chain
 # TODO: there might be a better way of doing this but it's good enough for now
-split_depths =  {}
+split_depths = {}
 
 for idx, path in enumerate(images, 1):
     base = os.path.splitext(os.path.relpath(path, input_folder))[0]
@@ -323,9 +343,9 @@ for idx, path in enumerate(images, 1):
     os.makedirs(output_dir, exist_ok=True)
     print(idx, base)
     if args.skip_existing and os.path.isfile(
-        os.path.join(output_folder, '{:s}.png'.format(base))):
-      print(" == Already exists, skipping == ")
-      continue
+            os.path.join(output_folder, '{:s}.png'.format(base))):
+        print(" == Already exists, skipping == ")
+        continue
     # read image
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
     if len(img.shape) < 3:
@@ -339,18 +359,20 @@ for idx, path in enumerate(images, 1):
     elif args.seamless == 'replicate':
         img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REPLICATE)
     elif args.seamless == 'alpha_pad':
-        img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0])
+        img = cv2.copyMakeBorder(
+            img, 16, 16, 16, 16, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0])
     final_scale = 1
 
     for i, model_path in enumerate(model_chain):
-        
+
         img_height, img_width = img.shape[:2]
 
         # Load the model so we can access the scale
         load_model(model_path)
 
         if args.cache_max_split_depth and len(split_depths.keys()) > 0:
-            rlt, depth = ops.auto_split_upscale(img, upscale, last_scale, max_depth=split_depths[i])
+            rlt, depth = ops.auto_split_upscale(
+                img, upscale, last_scale, max_depth=split_depths[i])
         else:
             rlt, depth = ops.auto_split_upscale(img, upscale, last_scale)
             split_depths[i] = depth
