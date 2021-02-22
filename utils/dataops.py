@@ -2,23 +2,29 @@ import numpy as np
 import torch
 import gc
 
+
 def bgr_to_rgb(image: torch.Tensor) -> torch.Tensor:
     # flip image channels
-    out: torch.Tensor = image.flip(-3) #https://github.com/pytorch/pytorch/issues/229
-    #out: torch.Tensor = image[[2, 1, 0], :, :] #RGB to BGR #may be faster
+    # https://github.com/pytorch/pytorch/issues/229
+    out: torch.Tensor = image.flip(-3)
+    # out: torch.Tensor = image[[2, 1, 0], :, :] #RGB to BGR #may be faster
     return out
 
+
 def rgb_to_bgr(image: torch.Tensor) -> torch.Tensor:
-    #same operation as bgr_to_rgb(), flip image channels
+    # same operation as bgr_to_rgb(), flip image channels
     return bgr_to_rgb(image)
+
 
 def bgra_to_rgba(image: torch.Tensor) -> torch.Tensor:
     out: torch.Tensor = image[[2, 1, 0, 3], :, :]
     return out
 
+
 def rgba_to_bgra(image: torch.Tensor) -> torch.Tensor:
-    #same operation as bgra_to_rgba(), flip image channels
+    # same operation as bgra_to_rgba(), flip image channels
     return bgra_to_rgba(image)
+
 
 def auto_split_upscale(lr_img, upscale_function, scale=4, overlap=32, max_depth=None, current_depth=1):
 
@@ -47,10 +53,14 @@ def auto_split_upscale(lr_img, upscale_function, scale=4, overlap=32, max_depth=
 
     # Recursively upscale the quadrants
     # After we go through the top left quadrant, we know the maximum depth and no longer need to test for out-of-memory
-    top_left_rlt, depth = auto_split_upscale(top_left, upscale_function, scale=scale, overlap=overlap, current_depth=current_depth+1)
-    top_right_rlt, _ = auto_split_upscale(top_right, upscale_function, scale=scale, overlap=overlap, max_depth=depth, current_depth=current_depth+1)
-    bottom_left_rlt, _ = auto_split_upscale(bottom_left, upscale_function, scale=scale, overlap=overlap, max_depth=depth, current_depth=current_depth+1)
-    bottom_right_rlt, _ = auto_split_upscale(bottom_right, upscale_function, scale=scale, overlap=overlap, max_depth=depth, current_depth=current_depth+1)
+    top_left_rlt, depth = auto_split_upscale(
+        top_left, upscale_function, scale=scale, overlap=overlap, current_depth=current_depth+1)
+    top_right_rlt, _ = auto_split_upscale(
+        top_right, upscale_function, scale=scale, overlap=overlap, max_depth=depth, current_depth=current_depth+1)
+    bottom_left_rlt, _ = auto_split_upscale(
+        bottom_left, upscale_function, scale=scale, overlap=overlap, max_depth=depth, current_depth=current_depth+1)
+    bottom_right_rlt, _ = auto_split_upscale(
+        bottom_right, upscale_function, scale=scale, overlap=overlap, max_depth=depth, current_depth=current_depth+1)
 
     # Define output shape
     out_h = h * scale
@@ -61,8 +71,11 @@ def auto_split_upscale(lr_img, upscale_function, scale=4, overlap=32, max_depth=
 
     # Fill output image with tiles, cropping out the overlaps
     output_img[:out_h//2, :out_w//2, :] = top_left_rlt[:out_h//2, :out_w//2, :]
-    output_img[:out_h//2, -out_w//2:, :] = top_right_rlt[:out_h//2, -out_w//2:, :]
-    output_img[-out_h//2:, :out_w//2, :] = bottom_left_rlt[-out_h//2:, :out_w//2, :]
-    output_img[-out_h//2:, -out_w//2:, :] = bottom_right_rlt[-out_h//2:, -out_w//2:, :]
+    output_img[:out_h//2, -out_w//2:,
+               :] = top_right_rlt[:out_h//2, -out_w//2:, :]
+    output_img[-out_h//2:, :out_w//2,
+               :] = bottom_left_rlt[-out_h//2:, :out_w//2, :]
+    output_img[-out_h//2:, -out_w//2:,
+               :] = bottom_right_rlt[-out_h//2:, -out_w//2:, :]
 
     return output_img, depth

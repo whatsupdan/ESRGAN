@@ -1,9 +1,11 @@
 import argparse
+import functools
 import glob
 import math
 import os.path
 import sys
 from collections import OrderedDict
+import asyncio
 
 import cv2
 import numpy as np
@@ -134,7 +136,7 @@ def process(img):
     return output
 
 
-def load_model(model_path):
+async def load_model(model_path):
     global last_model, last_in_nc, last_out_nc, last_nf, last_nb, last_scale, last_kind, model
     if model_path != last_model:
         # interpolating OTF, example: 4xBox:25&4xPSNR:75
@@ -315,7 +317,7 @@ def upscale(img):
     return output
 
 
-def crop_seamless(img, scale):
+async def crop_seamless(img, scale):
     img_height, img_width = img.shape[:2]
     y, x = 16 * scale, 16 * scale
     h, w = img_height - (32 * scale), img_width - (32 * scale)
@@ -323,66 +325,87 @@ def crop_seamless(img, scale):
     return img
 
 
-print('Model{:s}: {:s}\nUpscaling...'.format(
-      's' if len(model_chain) > 1 else '',
-      ', '.join([os.path.splitext(os.path.basename(x))[0] for x in model_chain])))
+async def main():
+    print('Model{:s}: {:s}\nUpscaling...'.format(
+        's' if len(model_chain) > 1 else '',
+        ', '.join([os.path.splitext(os.path.basename(x))[0] for x in model_chain])))
 
-images = []
-for root, _, files in os.walk(input_folder):
-    for file in sorted(files, reverse=args.reverse):
-        if file.split('.')[-1].lower() in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tga']:
-            images.append(os.path.join(root, file))
+    images = []
+    for root, _, files in os.walk(input_folder):
+        for file in sorted(files, reverse=args.reverse):
+            if file.split('.')[-1].lower() in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tga']:
+                images.append(os.path.join(root, file))
 
-# Store the maximum split depths for each model in the chain
-# TODO: there might be a better way of doing this but it's good enough for now
-split_depths = {}
+    # Store the maximum split depths for each model in the chain
+    # TODO: there might be a better way of doing this but it's good enough for now
+    split_depths = {}
 
-for idx, path in enumerate(images, 1):
-    base = os.path.splitext(os.path.relpath(path, input_folder))[0]
-    output_dir = os.path.dirname(os.path.join(output_folder, base))
-    os.makedirs(output_dir, exist_ok=True)
-    print(idx, base)
-    if args.skip_existing and os.path.isfile(
-            os.path.join(output_folder, '{:s}.png'.format(base))):
-        print(" == Already exists, skipping == ")
-        continue
-    # read image
-    img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-    if len(img.shape) < 3:
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    for idx, path in enumerate(images, 1):
+        base = os.path.splitext(os.path.relpath(path, input_folder))[0]
+        output_dir = os.path.dirname(os.path.join(output_folder, base))
+        os.makedirs(output_dir, exist_ok=True)
+        print(idx, base)
+        if args.skip_existing and os.path.isfile(
+                os.path.join(output_folder, '{:s}.png'.format(base))):
+            print(" == Already exists, skipping == ")
+            continue
 
-    # Seamless modes
-    if args.seamless == 'tile':
-        img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_WRAP)
-    elif args.seamless == 'mirror':
-        img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REFLECT_101)
-    elif args.seamless == 'replicate':
-        img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REPLICATE)
-    elif args.seamless == 'alpha_pad':
-        img = cv2.copyMakeBorder(
-            img, 16, 16, 16, 16, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0])
-    final_scale = 1
+        loop = asyncio.get_running_loop()
 
-    for i, model_path in enumerate(model_chain):
+        # read image
+        read_in_partial = functools.partial(
+            cv2.imread, path, cv2.IMREAD_UNCHANGED)
+        img = await loop.run_in_executor(None, read_in_partial)
+        # img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        if len(img.shape) < 3:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
-        img_height, img_width = img.shape[:2]
+        # Seamless modes
+        if args.seamless == 'tile':
+            img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_WRAP)
+        elif args.seamless == 'mirror':
+            img = cv2.copyMakeBorder(
+                img, 16, 16, 16, 16, cv2.BORDER_REFLECT_101)
+        elif args.seamless == 'replicate':
+            img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REPLICATE)
+        elif args.seamless == 'alpha_pad':
+            img = cv2.copyMakeBorder(
+                img, 16, 16, 16, 16, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0])
+        final_scale = 1
 
-        # Load the model so we can access the scale
-        load_model(model_path)
+        for i, model_path in enumerate(model_chain):
 
-        if args.cache_max_split_depth and len(split_depths.keys()) > 0:
-            rlt, depth = ops.auto_split_upscale(
-                img, upscale, last_scale, max_depth=split_depths[i])
-        else:
-            rlt, depth = ops.auto_split_upscale(img, upscale, last_scale)
-            split_depths[i] = depth
+            img_height, img_width = img.shape[:2]
 
-        final_scale *= last_scale
+            # Load the model so we can access the scale
+            await load_model(model_path)
 
-        # This is for model chaining
-        img = rlt.astype('uint8')
+            if args.cache_max_split_depth and len(split_depths.keys()) > 0:
+                upscale_partial = functools.partial(
+                    ops.auto_split_upscale, img, upscale, last_scale, max_depth=split_depths[i])
+                result = await loop.run_in_executor(None, upscale_partial)
+                rlt, depth = result
+                # rlt, depth = await ops.auto_split_upscale(
+                #     img, upscale, last_scale, max_depth=split_depths[i])
+            else:
+                upscale_partial = functools.partial(
+                    ops.auto_split_upscale, img, upscale, last_scale)
+                result = await loop.run_in_executor(None, upscale_partial)
+                rlt, depth = result
+                # rlt, depth = await ops.auto_split_upscale(img, upscale, last_scale)
+                split_depths[i] = depth
 
-    if args.seamless:
-        rlt = crop_seamless(rlt, final_scale)
+            final_scale *= last_scale
 
-    cv2.imwrite(os.path.join(output_folder, '{:s}.png'.format(base)), rlt)
+            # This is for model chaining
+            img = rlt.astype('uint8')
+
+        if args.seamless:
+            rlt = await crop_seamless(rlt, final_scale)
+
+        write_out_partial = functools.partial(cv2.imwrite, os.path.join(
+            output_folder, '{:s}.png'.format(base)), rlt)
+        await loop.run_in_executor(None, write_out_partial)
+
+
+asyncio.run(main())
