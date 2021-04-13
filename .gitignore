@@ -142,3 +142,4 @@ cython_debug/
 *.pth
 input/**/*.*
 output/**/*.*
+.vscode/

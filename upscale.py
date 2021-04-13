@@ -69,7 +69,7 @@ class Upscale:
     last_nb: int = None
     last_scale: int = None
     last_kind: str = None
-    model: Union[arch.nn.Module, arch.RRDB_Net, arch.SPSRNet] = None
+    model: Union[arch.nn.Module, arch.RRDBNet, arch.SPSRNet] = None
 
     def __init__(
         self,
@@ -347,6 +347,7 @@ class Upscale:
             # extract model information
             scale2 = 0
             max_part = 0
+            plus = False
             if "f_HR_conv1.0.weight" in state_dict:
                 kind = "SPSR"
                 scalemin = 4
@@ -369,6 +370,9 @@ class Upscale:
                     if part_num > max_part:
                         max_part = part_num
                         self.out_nc = state_dict[part].shape[0]
+                if "conv1x1" in part and not plus:
+                    plus = True
+
             upscale = 2 ** scale2
             self.in_nc = state_dict["model.0.weight"].shape[1]
             if kind == "SPSR":
@@ -384,18 +388,18 @@ class Upscale:
                 or kind != self.last_kind
             ):
                 if kind == "ESRGAN":
-                    self.model = arch.RRDB_Net(
-                        self.in_nc,
-                        self.out_nc,
-                        nf,
-                        nb,
+                    self.model = arch.RRDBNet(
+                        in_nc=self.in_nc,
+                        out_nc=self.out_nc,
+                        nf=nf,
+                        nb=nb,
                         gc=32,
                         upscale=upscale,
                         norm_type=None,
                         act_type="leakyrelu",
                         mode="CNA",
-                        res_scale=1,
                         upsample_mode="upconv",
+                        plus=plus,
                     )
                 elif kind == "SPSR":
                     self.model = arch.SPSRNet(

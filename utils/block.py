@@ -253,29 +253,115 @@ class ResNetBlock(nn.Module):
         return x + res
 
 
+class RRDB(nn.Module):
+    """
+    Residual in Residual Dense Block
+    (ESRGAN: Enhanced Super-Resolution Generative Adversarial Networks)
+    """
+
+    def __init__(
+        self,
+        nf,
+        kernel_size=3,
+        gc=32,
+        stride=1,
+        bias=1,
+        pad_type="zero",
+        norm_type=None,
+        act_type="leakyrelu",
+        mode="CNA",
+        convtype="Conv2D",
+        spectral_norm=False,
+        plus=False,
+    ):
+        super(RRDB, self).__init__()
+        self.RDB1 = ResidualDenseBlock_5C(
+            nf,
+            kernel_size,
+            gc,
+            stride,
+            bias,
+            pad_type,
+            norm_type,
+            act_type,
+            mode,
+            plus=plus,
+        )
+        self.RDB2 = ResidualDenseBlock_5C(
+            nf,
+            kernel_size,
+            gc,
+            stride,
+            bias,
+            pad_type,
+            norm_type,
+            act_type,
+            mode,
+            plus=plus,
+        )
+        self.RDB3 = ResidualDenseBlock_5C(
+            nf,
+            kernel_size,
+            gc,
+            stride,
+            bias,
+            pad_type,
+            norm_type,
+            act_type,
+            mode,
+            plus=plus,
+        )
+
+    def forward(self, x):
+        out = self.RDB1(x)
+        out = self.RDB2(out)
+        out = self.RDB3(out)
+        return out * 0.2 + x
+
+
 class ResidualDenseBlock_5C(nn.Module):
     """
     Residual Dense Block
     style: 5 convs
     The core module of paper: (Residual Dense Network for Image Super-Resolution, CVPR 18)
+    Modified options that can be used:
+        - "Partial Convolution based Padding" arXiv:1811.11718
+        - "Spectral normalization" arXiv:1802.05957
+        - "ICASSP 2020 - ESRGAN+ : Further Improving ESRGAN" N. C.
+            {Rakotonirina} and A. {Rasoanaivo}
+
+    Args:
+        nf (int): Channel number of intermediate features (num_feat).
+        gc (int): Channels for each growth (num_grow_ch: growth channel,
+            i.e. intermediate channels).
+        convtype (str): the type of convolution to use. Default: 'Conv2D'
+        gaussian_noise (bool): enable the ESRGAN+ gaussian noise (no new
+            trainable parameters)
+        plus (bool): enable the additional residual paths from ESRGAN+
+            (adds trainable parameters)
     """
 
     def __init__(
         self,
-        nc,
+        nf=64,
         kernel_size=3,
         gc=32,
         stride=1,
-        bias=True,
+        bias=1,
         pad_type="zero",
         norm_type=None,
         act_type="leakyrelu",
         mode="CNA",
+        plus=False,
     ):
         super(ResidualDenseBlock_5C, self).__init__()
-        # gc: growth channel, i.e. intermediate channels
+
+        ## +
+        self.conv1x1 = conv1x1(nf, gc) if plus else None
+        ## +
+
         self.conv1 = conv_block(
-            nc,
+            nf,
             gc,
             kernel_size,
             stride,
@@ -286,7 +372,7 @@ class ResidualDenseBlock_5C(nn.Module):
             mode=mode,
         )
         self.conv2 = conv_block(
-            nc + gc,
+            nf + gc,
             gc,
             kernel_size,
             stride,
@@ -297,7 +383,7 @@ class ResidualDenseBlock_5C(nn.Module):
             mode=mode,
         )
         self.conv3 = conv_block(
-            nc + 2 * gc,
+            nf + 2 * gc,
             gc,
             kernel_size,
             stride,
@@ -308,7 +394,7 @@ class ResidualDenseBlock_5C(nn.Module):
             mode=mode,
         )
         self.conv4 = conv_block(
-            nc + 3 * gc,
+            nf + 3 * gc,
             gc,
             kernel_size,
             stride,
@@ -323,8 +409,8 @@ class ResidualDenseBlock_5C(nn.Module):
         else:
             last_act = act_type
         self.conv5 = conv_block(
-            nc + 4 * gc,
-            nc,
+            nf + 4 * gc,
+            nf,
             3,
             stride,
             bias=bias,
@@ -337,46 +423,18 @@ class ResidualDenseBlock_5C(nn.Module):
     def forward(self, x):
         x1 = self.conv1(x)
         x2 = self.conv2(torch.cat((x, x1), 1))
+        if self.conv1x1:
+            x2 = x2 + self.conv1x1(x)  # +
         x3 = self.conv3(torch.cat((x, x1, x2), 1))
         x4 = self.conv4(torch.cat((x, x1, x2, x3), 1))
+        if self.conv1x1:
+            x4 = x4 + x2  # +
         x5 = self.conv5(torch.cat((x, x1, x2, x3, x4), 1))
-        return x5.mul(0.2) + x
+        return x5 * 0.2 + x
 
 
-class RRDB(nn.Module):
-    """
-    Residual in Residual Dense Block
-    (ESRGAN: Enhanced Super-Resolution Generative Adversarial Networks)
-    """
-
-    def __init__(
-        self,
-        nc,
-        kernel_size=3,
-        gc=32,
-        stride=1,
-        bias=True,
-        pad_type="zero",
-        norm_type=None,
-        act_type="leakyrelu",
-        mode="CNA",
-    ):
-        super(RRDB, self).__init__()
-        self.RDB1 = ResidualDenseBlock_5C(
-            nc, kernel_size, gc, stride, bias, pad_type, norm_type, act_type, mode
-        )
-        self.RDB2 = ResidualDenseBlock_5C(
-            nc, kernel_size, gc, stride, bias, pad_type, norm_type, act_type, mode
-        )
-        self.RDB3 = ResidualDenseBlock_5C(
-            nc, kernel_size, gc, stride, bias, pad_type, norm_type, act_type, mode
-        )
-
-    def forward(self, x):
-        out = self.RDB1(x)
-        out = self.RDB2(out)
-        out = self.RDB3(out)
-        return out.mul(0.2) + x
+def conv1x1(in_planes, out_planes, stride=1):
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
 ####################
@@ -417,7 +475,7 @@ def pixelshuffle_block(
     return sequential(conv, pixel_shuffle, n, a)
 
 
-def upconv_blcok(
+def upconv_block(
     in_nc,
     out_nc,
     upscale_factor=2,
