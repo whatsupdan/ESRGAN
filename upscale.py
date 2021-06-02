@@ -428,6 +428,7 @@ class Upscale:
             for k, v in self.model.named_parameters():
                 v.requires_grad = False
             self.model = self.model.to(self.device)
+        self.last_model = model_path
 
     # This code is a somewhat modified version of BlueAmulet's fork of ESRGAN by Xinntao
     def upscale(self, img: np.ndarray) -> np.ndarray:
