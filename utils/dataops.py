@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import gc
+
 import numpy as np
 import torch
-import gc
 
 
 def bgr_to_rgb(image: torch.Tensor) -> torch.Tensor:
@@ -45,7 +46,7 @@ def auto_split_upscale(
             return result, current_depth
         except RuntimeError as e:
             # Check to see if its actually the CUDA out of memory error
-            if "allocate" in str(e):
+            if "CUDA" in str(e):
                 # Collect garbage (clear VRAM)
                 torch.cuda.empty_cache()
                 gc.collect()
