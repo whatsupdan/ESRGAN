@@ -8,7 +8,8 @@ This fork ports features over from my ESRGAN-Bot repository and adds a few more.
 * Transparency preservation (3 different modes)
 * 1-bit transparency support (with half transparency as well)
 * Both new-arch and old-arch models
-* Regular and SPSR models, of any scale or internal model settings
+* ESRGAN+ and SPSR architecture changes,
+* Any scale and most other internal model parameter settings
 * On-the-fly interpolation
 
 **Tile size was recently removed! It is no longer needed for split/merge functionality!**
