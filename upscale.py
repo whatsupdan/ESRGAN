@@ -14,30 +14,26 @@ import torch
 import typer
 from rich import print
 from rich.logging import RichHandler
-from rich.progress import (
-    BarColumn,
-    Progress,
-    # SpinnerColumn,
-    TaskID,
-    TimeRemainingColumn,
-)
+from rich.progress import BarColumn, Progress, TaskID, TimeRemainingColumn
 
-import utils.architecture as arch
 import utils.dataops as ops
+from utils.architecture.RRDB import RRDBNet as ESRGAN
+from utils.architecture.SPSR import SPSRNet as SPSR
+from utils.architecture.SRVGG import SRVGGNetCompact as RealESRGANv2
 
 
 class SeamlessOptions(str, Enum):
-    tile = "tile"
-    mirror = "mirror"
-    replicate = "replicate"
-    alpha_pad = "alpha_pad"
+    TILE = "tile"
+    MIRROR = "mirror"
+    REPLICATE = "replicate"
+    ALPHA_PAD = "alpha_pad"
 
 
 class AlphaOptions(str, Enum):
-    no_alpha = "no_alpha"
-    bas = "bas"
-    alpha_separately = "alpha_separately"
-    swapping = "swapping"
+    NO_ALPHA = "none"
+    BG_DIFFERENCE = "bg_difference"
+    ALPHA_SEPARATELY = "separate"
+    SWAPPING = "swapping"
 
 
 class Upscale:
@@ -69,7 +65,7 @@ class Upscale:
     last_nb: int = None
     last_scale: int = None
     last_kind: str = None
-    model: Union[arch.nn.Module, arch.RRDBNet, arch.SPSRNet] = None
+    model: Union[torch.nn.Module, ESRGAN, RealESRGANv2, SPSR] = None
 
     def __init__(
         self,
@@ -151,9 +147,6 @@ class Upscale:
         elif not self.output.exists():
             self.output.mkdir(parents=True)
 
-        self.in_nc = None
-        self.out_nc = None
-
         print(
             'Model{:s}: "{:s}"'.format(
                 "s" if len(model_chain) > 1 else "",
@@ -199,15 +192,15 @@ class Upscale:
                     img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
                 # Seamless modes
-                if self.seamless == SeamlessOptions.tile:
+                if self.seamless == SeamlessOptions.TILE:
                     img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_WRAP)
-                elif self.seamless == SeamlessOptions.mirror:
+                elif self.seamless == SeamlessOptions.MIRROR:
                     img = cv2.copyMakeBorder(
                         img, 16, 16, 16, 16, cv2.BORDER_REFLECT_101
                     )
-                elif self.seamless == SeamlessOptions.replicate:
+                elif self.seamless == SeamlessOptions.REPLICATE:
                     img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REPLICATE)
-                elif self.seamless == SeamlessOptions.alpha_pad:
+                elif self.seamless == SeamlessOptions.ALPHA_PAD:
                     img = cv2.copyMakeBorder(
                         img, 16, 16, 16, 16, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0]
                     )
@@ -312,122 +305,42 @@ class Upscale:
             else:
                 state_dict = torch.load(model_path)
 
-            if "conv_first.weight" in state_dict:
-                print("Attempting to convert and load a new-format model")
-                old_net = {}
-                items = []
-                for k, v in state_dict.items():
-                    items.append(k)
+        # SRVGGNet Real-ESRGAN (v2)
+        if (
+            "params" in state_dict.keys()
+            and "body.0.weight" in state_dict["params"].keys()
+        ):
+            self.model = RealESRGANv2(state_dict)
+            self.last_in_nc = self.model.num_in_ch
+            self.last_out_nc = self.model.num_out_ch
+            self.last_nf = self.model.num_feat
+            self.last_nb = self.model.num_conv
+            self.last_scale = self.model.scale
+            self.last_model = model_path
+        # SPSR (ESRGAN with lots of extra layers)
+        elif "f_HR_conv1.0.weight" in state_dict:
+            self.model = SPSR(state_dict)
+            self.last_in_nc = self.model.in_nc
+            self.last_out_nc = self.model.out_nc
+            self.last_nf = self.model.num_filters
+            self.last_nb = self.model.num_blocks
+            self.last_scale = self.model.scale
+            self.last_model = model_path
+        # Regular ESRGAN, "new-arch" ESRGAN, Real-ESRGAN v1
+        else:
+            self.model = ESRGAN(state_dict)
+            self.last_in_nc = self.model.in_nc
+            self.last_out_nc = self.model.out_nc
+            self.last_nf = self.model.num_filters
+            self.last_nb = self.model.num_blocks
+            self.last_scale = self.model.scale
+            self.last_model = model_path
 
-                old_net["model.0.weight"] = state_dict["conv_first.weight"]
-                old_net["model.0.bias"] = state_dict["conv_first.bias"]
-
-                for k in items.copy():
-                    if "RDB" in k:
-                        ori_k = k.replace("RRDB_trunk.", "model.1.sub.")
-                        if ".weight" in k:
-                            ori_k = ori_k.replace(".weight", ".0.weight")
-                        elif ".bias" in k:
-                            ori_k = ori_k.replace(".bias", ".0.bias")
-                        old_net[ori_k] = state_dict[k]
-                        items.remove(k)
-
-                old_net["model.1.sub.23.weight"] = state_dict["trunk_conv.weight"]
-                old_net["model.1.sub.23.bias"] = state_dict["trunk_conv.bias"]
-                old_net["model.3.weight"] = state_dict["upconv1.weight"]
-                old_net["model.3.bias"] = state_dict["upconv1.bias"]
-                old_net["model.6.weight"] = state_dict["upconv2.weight"]
-                old_net["model.6.bias"] = state_dict["upconv2.bias"]
-                old_net["model.8.weight"] = state_dict["HRconv.weight"]
-                old_net["model.8.bias"] = state_dict["HRconv.bias"]
-                old_net["model.10.weight"] = state_dict["conv_last.weight"]
-                old_net["model.10.bias"] = state_dict["conv_last.bias"]
-                state_dict = old_net
-
-            # extract model information
-            scale2 = 0
-            max_part = 0
-            plus = False
-            if "f_HR_conv1.0.weight" in state_dict:
-                kind = "SPSR"
-                scalemin = 4
-            else:
-                kind = "ESRGAN"
-                scalemin = 6
-            for part in list(state_dict):
-                parts = part.split(".")
-                n_parts = len(parts)
-                if n_parts == 5 and parts[2] == "sub":
-                    nb = int(parts[3])
-                elif n_parts == 3:
-                    part_num = int(parts[1])
-                    if (
-                        part_num > scalemin
-                        and parts[0] == "model"
-                        and parts[2] == "weight"
-                    ):
-                        scale2 += 1
-                    if part_num > max_part:
-                        max_part = part_num
-                        self.out_nc = state_dict[part].shape[0]
-                if "conv1x1" in part and not plus:
-                    plus = True
-
-            upscale = 2 ** scale2
-            self.in_nc = state_dict["model.0.weight"].shape[1]
-            if kind == "SPSR":
-                self.out_nc = state_dict["f_HR_conv1.0.weight"].shape[0]
-            nf = state_dict["model.0.weight"].shape[0]
-
-            if (
-                self.in_nc != self.last_in_nc
-                or self.out_nc != self.last_out_nc
-                or nf != self.last_nf
-                or nb != self.last_nb
-                or upscale != self.last_scale
-                or kind != self.last_kind
-            ):
-                if kind == "ESRGAN":
-                    self.model = arch.RRDBNet(
-                        in_nc=self.in_nc,
-                        out_nc=self.out_nc,
-                        nf=nf,
-                        nb=nb,
-                        gc=32,
-                        upscale=upscale,
-                        norm_type=None,
-                        act_type="leakyrelu",
-                        mode="CNA",
-                        upsample_mode="upconv",
-                        plus=plus,
-                    )
-                elif kind == "SPSR":
-                    self.model = arch.SPSRNet(
-                        self.in_nc,
-                        self.out_nc,
-                        nf,
-                        nb,
-                        gc=32,
-                        upscale=upscale,
-                        norm_type=None,
-                        act_type="leakyrelu",
-                        mode="CNA",
-                        upsample_mode="upconv",
-                    )
-                self.last_in_nc = self.in_nc
-                self.last_out_nc = self.out_nc
-                self.last_nf = nf
-                self.last_nb = nb
-                self.last_scale = upscale
-                self.last_kind = kind
-                self.last_model = model_path
-
-            self.model.load_state_dict(state_dict, strict=True)
-            del state_dict
-            self.model.eval()
-            for k, v in self.model.named_parameters():
-                v.requires_grad = False
-            self.model = self.model.to(self.device)
+        del state_dict
+        self.model.eval()
+        for k, v in self.model.named_parameters():
+            v.requires_grad = False
+        self.model = self.model.to(self.device)
         self.last_model = model_path
 
     # This code is a somewhat modified version of BlueAmulet's fork of ESRGAN by Xinntao
@@ -453,7 +366,7 @@ class Upscale:
         ):
 
             # Fill alpha with white and with black, remove the difference
-            if self.alpha_mode == AlphaOptions.bas:
+            if self.alpha_mode == AlphaOptions.BG_DIFFERENCE:
                 img1 = np.copy(img[:, :, :3])
                 img2 = np.copy(img[:, :, :3])
                 for c in range(3):
@@ -466,7 +379,7 @@ class Upscale:
                 output = np.dstack((output1, alpha))
                 output = np.clip(output, 0, 1)
             # Upscale the alpha channel itself as its own image
-            elif self.alpha_mode == AlphaOptions.alpha_separately:
+            elif self.alpha_mode == AlphaOptions.ALPHA_SEPARATELY:
                 img1 = np.copy(img[:, :, :3])
                 img2 = cv2.merge((img[:, :, 3], img[:, :, 3], img[:, :, 3]))
                 output1 = self.process(img1)
@@ -480,7 +393,7 @@ class Upscale:
                     )
                 )
             # Use the alpha channel like a regular channel
-            elif self.alpha_mode == AlphaOptions.swapping:
+            elif self.alpha_mode == AlphaOptions.SWAPPING:
                 img1 = cv2.merge((img[:, :, 0], img[:, :, 1], img[:, :, 2]))
                 img2 = cv2.merge((img[:, :, 1], img[:, :, 2], img[:, :, 3]))
                 output1 = self.process(img1)
