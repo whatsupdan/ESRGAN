@@ -9,8 +9,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-STATE_T = OrderedDict[Union[str, Tensor]]
-
 
 class SRVGGNetCompact(nn.Module):
     """A compact VGG-style network structure for super-resolution.
@@ -27,7 +25,7 @@ class SRVGGNetCompact(nn.Module):
 
     def __init__(
         self,
-        state_dict: STATE_T,
+        state_dict,
         act_type: str = "prelu",
     ):
         super(SRVGGNetCompact, self).__init__()

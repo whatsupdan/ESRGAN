@@ -2,17 +2,11 @@
 # -*- coding: utf-8 -*-
 
 import math
-import re
-from collections import OrderedDict
-from typing import Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import utils.architecture.block as B
-from torch import Tensor
-
-STATE_T = OrderedDict[Union[str, Tensor]]
 
 
 class Get_gradient_nopadding(nn.Module):
@@ -43,7 +37,7 @@ class Get_gradient_nopadding(nn.Module):
 class SPSRNet(nn.Module):
     def __init__(
         self,
-        state_dict: STATE_T,
+        state_dict,
         norm=None,
         act: str = "leakyrelu",
         upsampler: str = "upconv",

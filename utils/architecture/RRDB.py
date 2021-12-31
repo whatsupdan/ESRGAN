@@ -5,21 +5,18 @@ import functools
 import math
 import re
 from collections import OrderedDict
-from typing import Union
 
 import torch
 import torch.nn as nn
 import utils.architecture.block as B
-from torch import Tensor
 
-STATE_T = OrderedDict[Union[str, Tensor]]
 
 # Borrowed from https://github.com/rlaphoenix/VSGAN/blob/master/vsgan/archs/ESRGAN.py
 # Which enhanced stuff that was already here
 class RRDBNet(nn.Module):
     def __init__(
         self,
-        state_dict: STATE_T,
+        state_dict,
         norm=None,
         act: str = "leakyrelu",
         upsampler: str = "upconv",
@@ -73,7 +70,7 @@ class RRDBNet(nn.Module):
         self.num_blocks = self.get_num_blocks()
         self.plus = any("conv1x1" in k for k in self.state.keys())
 
-        self.state: STATE_T = self.new_to_old_arch(self.state)
+        self.state = self.new_to_old_arch(self.state)
 
         self.key_arr = list(self.state.keys())
 
@@ -173,7 +170,7 @@ class RRDBNet(nn.Module):
 
         self.load_state_dict(self.state, strict=False)
 
-    def new_to_old_arch(self, state: STATE_T) -> STATE_T:
+    def new_to_old_arch(self, state):
         """Convert a new-arch model state dictionary to an old-arch dictionary."""
         if "params_ema" in state:
             state = state["params_ema"]
