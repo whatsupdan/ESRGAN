@@ -5,14 +5,14 @@ import functools
 import math
 import re
 from collections import OrderedDict
-from typing import Optional
+from typing import Union
 
 import torch
 import torch.nn as nn
 import utils.architecture.block as B
 from torch import Tensor
 
-STATE_T = OrderedDict[str, Tensor]
+STATE_T = OrderedDict[Union[str, Tensor]]
 
 # Borrowed from https://github.com/rlaphoenix/VSGAN/blob/master/vsgan/archs/ESRGAN.py
 # Which enhanced stuff that was already here

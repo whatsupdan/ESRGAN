@@ -4,7 +4,7 @@
 import math
 import re
 from collections import OrderedDict
-from typing import Optional
+from typing import Union
 
 import torch
 import torch.nn as nn
@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import utils.architecture.block as B
 from torch import Tensor
 
-STATE_T = OrderedDict[str, Tensor]
+STATE_T = OrderedDict[Union[str, Tensor]]
 
 
 class Get_gradient_nopadding(nn.Module):

@@ -3,12 +3,13 @@
 
 import math
 from collections import OrderedDict
+from typing import Union
 
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-STATE_T = OrderedDict[str, Tensor]
+STATE_T = OrderedDict[Union[str, Tensor]]
 
 
 class SRVGGNetCompact(nn.Module):
