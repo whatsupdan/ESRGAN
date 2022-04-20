@@ -68,17 +68,25 @@ class RRDBNet(nn.Module):
         if "params_ema" in self.state:
             self.state = self.state["params_ema"]
         self.num_blocks = self.get_num_blocks()
+
         self.plus = any("conv1x1" in k for k in self.state.keys())
 
         self.state = self.new_to_old_arch(self.state)
 
         self.key_arr = list(self.state.keys())
+        # print(self.key_arr)
 
         self.in_nc = self.state[self.key_arr[0]].shape[1]
         self.out_nc = self.state[self.key_arr[-1]].shape[0]
 
         self.scale = self.get_scale()
+
         self.num_filters = self.state[self.key_arr[0]].shape[0]
+
+        c2x2 = False
+        if self.state["model.0.weight"].shape[-2] == 2:
+            c2x2 = True
+            self.scale = math.ceil(self.scale ** (1.0 / 3))
 
         # Detect if pixelunshuffle was used (Real-ESRGAN)
         if self.in_nc in (self.out_nc * 4, self.out_nc * 16) and self.out_nc in (
@@ -102,11 +110,15 @@ class RRDBNet(nn.Module):
                 out_nc=self.num_filters,
                 upscale_factor=3,
                 act_type=self.act,
+                c2x2=c2x2,
             )
         else:
             upsample_blocks = [
                 upsample_block(
-                    in_nc=self.num_filters, out_nc=self.num_filters, act_type=self.act
+                    in_nc=self.num_filters,
+                    out_nc=self.num_filters,
+                    act_type=self.act,
+                    c2x2=c2x2,
                 )
                 for _ in range(int(math.log(self.scale, 2)))
             ]
@@ -119,6 +131,7 @@ class RRDBNet(nn.Module):
                 kernel_size=3,
                 norm_type=None,
                 act_type=None,
+                c2x2=c2x2,
             ),
             B.ShortcutBlock(
                 B.sequential(
@@ -135,6 +148,7 @@ class RRDBNet(nn.Module):
                             act_type=self.act,
                             mode="CNA",
                             plus=self.plus,
+                            c2x2=c2x2,
                         )
                         for _ in range(self.num_blocks)
                     ],
@@ -146,6 +160,7 @@ class RRDBNet(nn.Module):
                         norm_type=self.norm,
                         act_type=None,
                         mode=self.mode,
+                        c2x2=c2x2,
                     ),
                 )
             ),
@@ -157,6 +172,7 @@ class RRDBNet(nn.Module):
                 kernel_size=3,
                 norm_type=None,
                 act_type=self.act,
+                c2x2=c2x2,
             ),
             # hr_conv1
             B.conv_block(
@@ -165,6 +181,7 @@ class RRDBNet(nn.Module):
                 kernel_size=3,
                 norm_type=None,
                 act_type=None,
+                c2x2=c2x2,
             ),
         )
 
@@ -221,7 +238,7 @@ class RRDBNet(nn.Module):
                 part_num = int(parts[0])
                 if part_num > min_part and parts[1] == "weight":
                     n += 1
-        return 2 ** n
+        return 2**n
 
     def get_num_blocks(self) -> int:
         nbs = []
