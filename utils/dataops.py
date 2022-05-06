@@ -69,6 +69,7 @@ def auto_split_upscale(
         upscale_function,
         scale=scale,
         overlap=overlap,
+        max_depth=max_depth,
         current_depth=current_depth + 1,
     )
     top_right_rlt, _ = auto_split_upscale(
