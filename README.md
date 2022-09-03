@@ -39,4 +39,8 @@ Examples:
 -   `python upscale.py /models/4xBox.pth`
 -   `python upscale.py "1x_model1.pth@50|1x_model2.pth@50>2x_model3.pth"`
 
-If you want a GUI for ESRGAN and if you're on Windows, check out [Cupscale](https://github.com/n00mkrad/cupscale/). It implements most of this fork's features as well as other utilities around it.
+## GUIs
+- [chaiNNer](https://github.com/joeyballentine/chaiNNer)
+    - My GUI, has all these same features available plus more architecture support. Node based and very customizable. Multiplatform.
+- [Cupscale](https://github.com/n00mkrad/cupscale/).
+    - Windows only. Implements this fork as well as other utilities around it.
