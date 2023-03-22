@@ -1,5 +1,7 @@
 # Fork of [BlueAmulet's fork](https://github.com/BlueAmulet/ESRGAN) of [ESRGAN by Xinntao](https://github.com/xinntao/ESRGAN)
 
+## NOTE: This repo is no longer being actively maintained. I highly recommend using [chaiNNer](https://github.com/chaiNNer-org/chaiNNer) instead, as it is still actively maintained and supports a lot more than this repo does.
+
 This fork ports features over from my ESRGAN-Bot repository and adds a few more. It natively allows:
 
 -   In-memory splitting/merging functionality (fully seamless, recently revamped for the third time and no longer requires tile size)
@@ -48,7 +50,7 @@ pip install --user -r requirements.txt
 ```
 
 ## GUIs
-- [chaiNNer](https://github.com/joeyballentine/chaiNNer)
+- [chaiNNer](https://github.com/chaiNNer-org/chaiNNer)
     - My GUI, has all these same features available plus more architecture support. Node based and very customizable. Multiplatform.
 - [Cupscale](https://github.com/n00mkrad/cupscale/).
     - Windows only. Implements this fork as well as other utilities around it.
