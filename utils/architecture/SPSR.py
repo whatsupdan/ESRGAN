@@ -6,8 +6,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import utils.architecture.block as B
-
+import  mhg.upscale.ESRGAN.utils.architecture.block as B
 
 class Get_gradient_nopadding(nn.Module):
     def __init__(self):

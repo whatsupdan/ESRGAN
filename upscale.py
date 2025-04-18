@@ -16,10 +16,10 @@ from rich import print
 from rich.logging import RichHandler
 from rich.progress import BarColumn, Progress, TaskID, TimeRemainingColumn
 
-import utils.dataops as ops
-from utils.architecture.RRDB import RRDBNet as ESRGAN
-from utils.architecture.SPSR import SPSRNet as SPSR
-from utils.architecture.SRVGG import SRVGGNetCompact as RealESRGANv2
+import mhg.upscale.ESRGAN.utils.dataops as ops
+from mhg.upscale.ESRGAN.utils.architecture.RRDB import RRDBNet as ESRGAN
+from mhg.upscale.ESRGAN.utils.architecture.SPSR import SPSRNet as SPSR
+from mhg.upscale.ESRGAN.utils.architecture.SRVGG import SRVGGNetCompact as RealESRGANv2
 
 
 class SeamlessOptions(str, Enum):
@@ -105,29 +105,18 @@ class Upscale:
         self.alpha_mode = alpha_mode
         self.log = log
         if self.fp16:
-            torch.set_default_tensor_type(
-                torch.HalfTensor if self.cpu else torch.cuda.HalfTensor
-            )
+            torch.set_default_tensor_type(torch.HalfTensor if self.cpu else torch.cuda.HalfTensor)
 
     def run(self) -> None:
-        model_chain = (
-            self.model_str.split("+")
-            if "+" in self.model_str
-            else self.model_str.split(">")
-        )
+        model_chain = self.model_str.split("+") if "+" in self.model_str else self.model_str.split(">")
 
         for idx, model in enumerate(model_chain):
-
-            interpolations = (
-                model.split("|") if "|" in self.model_str else model.split("&")
-            )
+            interpolations = model.split("|") if "|" in self.model_str else model.split("&")
 
             if len(interpolations) > 1:
                 for i, interpolation in enumerate(interpolations):
                     interp_model, interp_amount = (
-                        interpolation.split("@")
-                        if "@" in interpolation
-                        else interpolation.split(":")
+                        interpolation.split("@") if "@" in interpolation else interpolation.split(":")
                     )
                     interp_model = self.__check_model_path(interp_model)
                     interpolations[i] = f"{interp_model}@{interp_amount}"
@@ -158,7 +147,31 @@ class Upscale:
         images: List[Path] = []
         # List of extensions: https://docs.opencv.org/4.x/d4/da8/group__imgcodecs.html#ga288b8b3da0892bd651fce07b3bbd3a56
         # Also gif and tga which seem to be supported as well though are undocumented.
-        for ext in ["bmp", "dib", "jpeg", "jpg", "jpe", "jp2", "png", "webp", "pbm", "pgm", "ppm", "pxm", "pnm", "pfm", "sr", "ras", "tiff", "tif", "exr", "hdr", "pic", "gif", "tga"]:
+        for ext in [
+            "bmp",
+            "dib",
+            "jpeg",
+            "jpg",
+            "jpe",
+            "jp2",
+            "png",
+            "webp",
+            "pbm",
+            "pgm",
+            "ppm",
+            "pxm",
+            "pnm",
+            "pfm",
+            "sr",
+            "ras",
+            "tiff",
+            "tif",
+            "exr",
+            "hdr",
+            "pic",
+            "gif",
+            "tga",
+        ]:
             images.extend(self.input.glob(f"**/*.{ext}"))
 
         # Store the maximum split depths for each model in the chain
@@ -179,9 +192,7 @@ class Upscale:
                 img_output_path_rel = output_dir.joinpath(f"{img_path.stem}.png")
                 output_dir.mkdir(parents=True, exist_ok=True)
                 if len(model_chain) == 1:
-                    self.log.info(
-                        f'Processing {str(idx).zfill(len(str(len(images))))}: "{img_input_path_rel}"'
-                    )
+                    self.log.info(f'Processing {str(idx).zfill(len(str(len(images))))}: "{img_input_path_rel}"')
                 if self.skip_existing and img_output_path_rel.is_file():
                     self.log.warning("Already exists, skipping")
                     if self.delete_input:
@@ -199,15 +210,11 @@ class Upscale:
                 if self.seamless == SeamlessOptions.TILE:
                     img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_WRAP)
                 elif self.seamless == SeamlessOptions.MIRROR:
-                    img = cv2.copyMakeBorder(
-                        img, 16, 16, 16, 16, cv2.BORDER_REFLECT_101
-                    )
+                    img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REFLECT_101)
                 elif self.seamless == SeamlessOptions.REPLICATE:
                     img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_REPLICATE)
                 elif self.seamless == SeamlessOptions.ALPHA_PAD:
-                    img = cv2.copyMakeBorder(
-                        img, 16, 16, 16, 16, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0]
-                    )
+                    img = cv2.copyMakeBorder(img, 16, 16, 16, 16, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0])
                 final_scale: int = 1
 
                 task_model_chain: TaskID = None
@@ -217,7 +224,6 @@ class Upscale:
                         total=len(model_chain),
                     )
                 for i, model_path in enumerate(model_chain):
-
                     img_height, img_width = img.shape[:2]
 
                     # Load the model so we can access the scale
@@ -231,9 +237,7 @@ class Upscale:
                             max_depth=split_depths[i],
                         )
                     else:
-                        rlt, depth = ops.auto_split_upscale(
-                            img, self.upscale, self.last_scale
-                        )
+                        rlt, depth = ops.auto_split_upscale(img, self.upscale, self.last_scale)
                         split_depths[i] = depth
 
                     final_scale *= self.last_scale
@@ -250,7 +254,7 @@ class Upscale:
                 # See https://jdhao.github.io/2019/09/11/opencv_unicode_image_path/
                 is_success, im_buf_arr = cv2.imencode(".png", rlt)
                 if not is_success:
-                    raise Exception('cv2.imencode failure')
+                    raise Exception("cv2.imencode failure")
                 im_buf_arr.tofile(str(img_output_path_rel.absolute()))
 
                 if self.delete_input:
@@ -299,9 +303,7 @@ class Upscale:
     def load_model(self, model_path: str):
         if model_path != self.last_model:
             # interpolating OTF, example: 4xBox:25&4xPSNR:75
-            if (":" in model_path or "@" in model_path) and (
-                "&" in model_path or "|" in model_path
-            ):
+            if (":" in model_path or "@" in model_path) and ("&" in model_path or "|" in model_path):
                 interps = model_path.split("&")[:2]
                 model_1 = torch.load(interps[0].split("@")[0])
                 model_2 = torch.load(interps[1].split("@")[0])
@@ -315,10 +317,7 @@ class Upscale:
                 state_dict = torch.load(model_path)
 
             # SRVGGNet Real-ESRGAN (v2)
-            if (
-                "params" in state_dict.keys()
-                and "body.0.weight" in state_dict["params"].keys()
-            ):
+            if "params" in state_dict.keys() and "body.0.weight" in state_dict["params"].keys():
                 self.model = RealESRGANv2(state_dict)
                 self.last_in_nc = self.model.num_in_ch
                 self.last_out_nc = self.model.num_out_ch
@@ -367,13 +366,7 @@ class Upscale:
 
         img = img * 1.0 / np.iinfo(img.dtype).max
 
-        if (
-            img.ndim == 3
-            and img.shape[2] == 4
-            and self.last_in_nc == 3
-            and self.last_out_nc == 3
-        ):
-
+        if img.ndim == 3 and img.shape[2] == 4 and self.last_in_nc == 3 and self.last_out_nc == 3:
             # Fill alpha with white and with black, remove the difference
             if self.alpha_mode == AlphaOptions.BG_DIFFERENCE:
                 img1 = np.copy(img[:, :, :3])
@@ -428,12 +421,8 @@ class Upscale:
                 output[:, :, 3] = alpha
             elif self.ternary_alpha:
                 alpha = output[:, :, 3]
-                half_transparent_lower_bound = (
-                    self.alpha_threshold - self.alpha_boundary_offset
-                )
-                half_transparent_upper_bound = (
-                    self.alpha_threshold + self.alpha_boundary_offset
-                )
+                half_transparent_lower_bound = self.alpha_threshold - self.alpha_boundary_offset
+                half_transparent_upper_bound = self.alpha_threshold + self.alpha_boundary_offset
                 alpha = np.where(
                     alpha < half_transparent_lower_bound,
                     0,
@@ -442,9 +431,7 @@ class Upscale:
                 output[:, :, 3] = alpha
         else:
             if img.ndim == 2:
-                img = np.tile(
-                    np.expand_dims(img, axis=2), (1, 1, min(self.last_in_nc, 3))
-                )
+                img = np.tile(np.expand_dims(img, axis=2), (1, 1, min(self.last_in_nc, 3)))
             if img.shape[2] > self.last_in_nc:  # remove extra channels
                 self.log.warning("Truncating image channels")
                 img = img[:, :, : self.last_in_nc]
@@ -500,9 +487,7 @@ def main(
         "-fp16",
         help="Use FloatingPoint16/Halftensor type for images.",
     ),
-    device_id: int = typer.Option(
-        0, "--device-id", "-did", help="The numerical ID of the GPU you want to use."
-    ),
+    device_id: int = typer.Option(0, "--device-id", "-did", help="The numerical ID of the GPU you want to use."),
     cache_max_split_depth: bool = typer.Option(
         False,
         "--cache-max-split-depth",
@@ -546,7 +531,6 @@ def main(
         help="Verbose mode",
     ),
 ):
-
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.WARNING,
         format="%(message)s",
